@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Core Settings
+      N8N_HOST: "localhost"
+      N8N_PORT: 5678
+      N8N_PROTOCOL: "http"
+
+      # Timezone (optional)
+      GENERIC_TIMEZONE: "Europe/Rome"
+
+      # Encryption key (required for secure credentials)
+      # Generate with: openssl rand -base64 24
+      N8N_ENCRYPTION_KEY: "CHANGE_ME_TO_A_SECURE_KEY"
+
+      # Execution mode (queue or regular)
+      EXECUTIONS_PROCESS: "main"
+
+      # Optional: disable telemetry
+      N8N_DIAGNOSTICS_ENABLED: "false"
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+    # Optional (for external webhook reachability)
+    # If you use a reverse proxy:
+    # environment:
+    #   WEBHOOK_URL: "https://your-domain.com/"
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.n8n.rule=Host(`n8n.your-domain.com`)"
+    #   - "traefik.http.routers.n8n.entrypoints=websecure"
+    #   - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+
+volumes:
+  n8n_data:

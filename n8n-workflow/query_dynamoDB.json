@@ -1,0 +1,67 @@
+{
+  "name": "Query DynamoDB",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "7e9ee80a-197e-487e-b7ed-ba880871ed6a",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "position": [
+        -176,
+        96
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  TableName: \"mytops-db\",\n  KeyConditionExpression: \"pk = :pk\",\n  ExpressionAttributeValues: {\n    \":pk\": {\"S\": \"MOVIE#INCEPTION\"}\n  }\n}];"
+      },
+      "id": "619d7f64-6c62-414c-9496-d0107bd3e056",
+      "name": "Build Query Params",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        32,
+        96
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "query"
+      },
+      "id": "dd688cb7-dab0-4b66-b103-fb26b3088bce",
+      "name": "Query DynamoDB",
+      "type": "n8n-nodes-base.awsDynamoDb",
+      "position": [
+        224,
+        96
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "function unmarshal(attr) {\n  if (attr.S !== undefined) return attr.S;\n  if (attr.N !== undefined) return Number(attr.N);\n  if (attr.BOOL !== undefined) return attr.BOOL;\n  if (attr.NULL !== undefined) return null;\n  if (attr.L !== undefined) return attr.L.map(unmarshal);\n  if (attr.M !== undefined) {\n    const obj = {};\n    for (const k in attr.M) obj[k] = unmarshal(attr.M[k]);\n    return obj;\n  }\n  return attr;\n}\n\nreturn items[0].json.Items.map(unmarshal);"
+      },
+      "id": "b67c91b3-147f-4fd8-ac44-3b279d1d211d",
+      "name": "Parse DynamoDB Output",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        432,
+        96
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "96e4d857-bf2a-4020-9bfa-89ceef6942bd",
+  "meta": {
+    "instanceId": "c017dd672a0dac9763dfcc1053b35dafa7f7471218e427e6f1aa5a9e0e87a600"
+  },
+  "id": "ifMWlYNWTkqCcwiL",
+  "tags": []
+}
