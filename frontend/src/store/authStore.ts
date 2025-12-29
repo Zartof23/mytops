@@ -2,10 +2,13 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
 
+type OAuthProvider = 'google' | 'github'
+
 interface AuthState {
   user: User | null
   session: Session | null
   loading: boolean
+  oauthLoading: OAuthProvider | null
   initialized: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -19,6 +22,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   session: null,
   loading: false,
+  oauthLoading: null,
   initialized: false,
 
   initialize: async () => {
@@ -55,22 +59,30 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signInWithGoogle: async () => {
+    set({ oauthLoading: 'google' })
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`
       }
     })
+    if (error) {
+      set({ oauthLoading: null })
+    }
     return { error }
   },
 
   signInWithGithub: async () => {
+    set({ oauthLoading: 'github' })
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`
       }
     })
+    if (error) {
+      set({ oauthLoading: null })
+    }
     return { error }
   },
 

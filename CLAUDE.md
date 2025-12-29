@@ -452,8 +452,10 @@ User profile shows preferables organized by topic
 - [x] ItemCard integration (rating with optimistic updates)
 - [x] Testing infrastructure (Vitest + React Testing Library)
 - [x] Test items seeded (20 items across 5 topics)
+- [x] OAuth UI improvements (Google/GitHub icons, loading states, error handling)
 
 ### In Progress
+- [ ] OAuth provider configuration (requires Google Cloud Console + GitHub OAuth App setup)
 - [ ] AI enrichment Edge Functions
 
 ## Documentation

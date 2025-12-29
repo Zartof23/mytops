@@ -181,6 +181,41 @@ Initial project concept used n8n as orchestrator and DynamoDB as database. Decis
 
 ---
 
+## [2025-12-29] OAuth UI Improvements
+
+### Feature: Enhanced OAuth Buttons & Error Handling
+
+**What**: Improved OAuth login experience with provider icons, loading states, and error handling.
+
+**Files Modified**:
+- `frontend/src/store/authStore.ts` - Added `oauthLoading` state to track which provider is loading
+- `frontend/src/pages/LoginPage.tsx` - Added Google/GitHub SVG icons, loading spinners, disabled states
+- `frontend/src/pages/RegisterPage.tsx` - Same OAuth button improvements
+- `frontend/src/pages/AuthCallback.tsx` - Added error handling, loading spinner, timeout fallback
+
+**Implementation Details**:
+
+**OAuth Button Improvements**:
+- Inline SVG icons for Google (colored) and GitHub (monochrome)
+- Loading spinner (Loader2) when OAuth redirect is in progress
+- Buttons disabled during any auth operation
+- Visual feedback for disabled state
+
+**AuthCallback Enhancements**:
+- Parses `error` and `error_description` from URL params
+- Shows error state with "Back to login" button
+- Loading spinner animation during callback processing
+- 10-second timeout fallback if auth hangs
+- Proper cleanup of auth listener subscription
+
+**OAuth Provider Setup (User Action)**:
+To complete OAuth setup:
+1. Create OAuth apps in Google Cloud Console and GitHub Developer Settings
+2. Set redirect URI: `https://ocasihbuejfjirsrnxzq.supabase.co/auth/v1/callback`
+3. Enable providers in Supabase Dashboard > Authentication > Providers
+
+---
+
 ## [2025-12-29] Rating Component & Testing Infrastructure
 
 ### Feature: StarRating Component with Testing
