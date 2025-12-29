@@ -181,6 +181,69 @@ Initial project concept used n8n as orchestrator and DynamoDB as database. Decis
 
 ---
 
+## [2025-12-29] Rating Component & Testing Infrastructure
+
+### Feature: StarRating Component with Testing
+
+**What**: Interactive 5-star rating component with full testing infrastructure.
+
+**Files Created**:
+- `frontend/vitest.config.ts` - Vitest configuration
+- `frontend/src/test/setup.ts` - Test setup with global mocks
+- `frontend/src/test/utils.tsx` - Custom render with providers
+- `frontend/src/services/ratingService.ts` - Rating CRUD operations
+- `frontend/src/services/ratingService.test.ts` - Service unit tests
+- `frontend/src/components/StarRating.tsx` - Star rating component
+- `frontend/src/components/StarRating.test.tsx` - Component tests
+- `frontend/src/components/ItemCard.test.tsx` - ItemCard integration tests
+
+**Files Modified**:
+- `frontend/package.json` - Added test scripts and dependencies
+- `frontend/tsconfig.app.json` - Added vitest/globals types
+- `frontend/src/components/ItemCard.tsx` - Integrated rating functionality
+- `frontend/src/pages/ProfilePage.tsx` - Uses StarRating component
+
+**Database Migration**:
+- `seed_test_items` - Seeded 20 items across 5 topics (Movies, Series, Books, Anime, Games)
+
+**Implementation Details**:
+
+**StarRating Component**:
+- 5 clickable star buttons using lucide-react Star icon
+- Hover preview effect (shows what rating would be)
+- Yellow fill for rated stars, muted for unrated
+- Size variants: sm, md, lg
+- Disabled/readOnly states
+- Full keyboard accessibility (Enter/Space to select)
+- ARIA labels for screen readers
+
+**ItemCard Rating Integration**:
+- Fetches user's existing rating on mount
+- Optimistic update on rating change (immediate UI feedback)
+- Rollback on error
+- stopPropagation to prevent card click when rating
+- "Sign in to rate" prompt for unauthenticated users
+
+**ratingService**:
+- `upsertRating(input)` - Create/update rating (handles UNIQUE constraint)
+- `getUserRating(itemId)` - Get user's rating for an item
+- `deleteRating(itemId)` - Remove rating
+
+**Testing Infrastructure**:
+- Vitest with jsdom environment
+- React Testing Library for component tests
+- @testing-library/user-event for interaction simulation
+- Custom render wrapper with BrowserRouter
+- Global test setup with Supabase mocks
+- 42 tests total (8 service + 18 StarRating + 16 ItemCard)
+
+**Security**:
+- RLS policies ensure users can only read/write their own ratings
+- Auth check before rating operations
+- Input validated via TypeScript types
+
+---
+
 ## Future Considerations
 
 Items discussed but deferred for post-MVP:

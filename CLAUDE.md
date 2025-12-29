@@ -54,11 +54,15 @@ mytops/
 │   └── CHANGELOG.md          # Decision log
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # UI components (Layout, ThemeToggle)
+│   │   ├── components/       # UI components (Layout, StarRating, ItemCard)
 │   │   ├── pages/            # Route pages
+│   │   ├── services/         # API service layer (ratingService)
+│   │   ├── hooks/            # Custom React hooks (useDebouncedValue)
+│   │   ├── test/             # Test utilities (setup.ts, utils.tsx)
 │   │   ├── lib/
 │   │   │   └── supabase.ts   # Supabase client
 │   │   └── store/            # Zustand stores
+│   ├── vitest.config.ts      # Test configuration
 │   └── tailwind.config.js
 ├── .env.example              # Environment template
 ├── CLAUDE.md                 # This file
@@ -78,6 +82,25 @@ npm run dev
 ```
 
 Access at `http://localhost:5173`
+
+### Testing
+
+```bash
+cd frontend
+npm test              # Run tests in watch mode
+npm test -- --run     # Run tests once
+npm run test:coverage # Run with coverage report
+```
+
+**Test structure:**
+- Unit tests: `src/**/*.test.ts` or `src/**/*.test.tsx`
+- Test utilities: `src/test/utils.tsx` (custom render with providers)
+- Setup: `src/test/setup.ts` (global mocks, cleanup)
+
+**Current test coverage:**
+- `StarRating` component (18 tests)
+- `ItemCard` component (16 tests)
+- `ratingService` (8 tests)
 
 ### Database
 
@@ -424,10 +447,13 @@ User profile shows preferables organized by topic
 - [x] Authentication UI (Login, Register pages)
 - [x] Topic browsing page
 - [x] User profile page structure
-- [x] Item search within topics (TopicDetailPage)
+- [x] Item search within topics (TopicDetailPage with debounced search)
+- [x] Rating component (StarRating with 5 stars, full test coverage)
+- [x] ItemCard integration (rating with optimistic updates)
+- [x] Testing infrastructure (Vitest + React Testing Library)
+- [x] Test items seeded (20 items across 5 topics)
 
 ### In Progress
-- [ ] Rating component (5 stars)
 - [ ] AI enrichment Edge Functions
 
 ## Documentation

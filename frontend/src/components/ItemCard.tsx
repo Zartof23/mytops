@@ -1,8 +1,14 @@
+import { useState, useEffect } from 'react'
 import type { Item } from '../types'
+import { StarRating } from './StarRating'
+import { useAuthStore } from '../store/authStore'
+import { ratingService } from '../services/ratingService'
 
 interface ItemCardProps {
   item: Item
   onClick?: () => void
+  /** Show rating component (default: true) */
+  showRating?: boolean
 }
 
 const sourceBadges = {
@@ -20,21 +26,69 @@ const sourceBadges = {
   }
 } as const
 
-export function ItemCard({ item, onClick }: ItemCardProps) {
+export function ItemCard({ item, onClick, showRating = true }: ItemCardProps) {
+  const { user } = useAuthStore()
+  const [userRating, setUserRating] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
   const badge = item.source ? sourceBadges[item.source] : null
+
+  // Fetch user's existing rating on mount
+  useEffect(() => {
+    if (!user || !showRating) return
+
+    async function fetchRating() {
+      const { data } = await ratingService.getUserRating(item.id)
+      if (data) {
+        setUserRating(data.rating)
+      }
+    }
+
+    fetchRating()
+  }, [user, item.id, showRating])
+
+  const handleRatingChange = async (rating: number) => {
+    if (!user) return
+
+    setIsLoading(true)
+    const previousRating = userRating
+
+    // Optimistic update
+    setUserRating(rating)
+
+    const { error } = await ratingService.upsertRating({
+      item_id: item.id,
+      rating
+    })
+
+    if (error) {
+      // Rollback on error
+      setUserRating(previousRating)
+      console.error('Failed to save rating:', error)
+    }
+
+    setIsLoading(false)
+  }
+
+  // Handle card click
+  const handleCardClick = () => {
+    onClick?.()
+  }
+
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick?.()
+    }
+  }
 
   return (
     <div
-      onClick={onClick}
+      onClick={handleCardClick}
       className="p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer"
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onClick()
-        }
-      } : undefined}
+      onKeyDown={onClick ? handleCardKeyDown : undefined}
     >
       {item.image_url && (
         <img
@@ -57,6 +111,27 @@ export function ItemCard({ item, onClick }: ItemCardProps) {
         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
           {item.description}
         </p>
+      )}
+
+      {showRating && (
+        <div
+          className="mt-3 pt-3 border-t"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <StarRating
+            value={userRating}
+            onChange={user ? handleRatingChange : undefined}
+            disabled={isLoading}
+            size="sm"
+            readOnly={!user}
+          />
+          {!user && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Sign in to rate
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

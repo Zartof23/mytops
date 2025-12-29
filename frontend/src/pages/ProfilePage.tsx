@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
+import { StarRating } from '../components/StarRating'
 import type { UserRating, Topic } from '../types'
 
 interface RatingsByTopic {
@@ -120,16 +121,7 @@ export function ProfilePage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <span
-                          key={star}
-                          className={star <= rating.rating ? 'text-yellow-500' : 'text-muted'}
-                        >
-                          ★
-                        </span>
-                      ))}
-                    </div>
+                    <StarRating value={rating.rating} readOnly size="sm" />
                   </div>
                 ))}
               </div>
