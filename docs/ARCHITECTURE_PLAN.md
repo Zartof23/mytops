@@ -349,7 +349,7 @@ mytops/
 ### Phase 3: Core Features (In Progress)
 - [x] Auth pages (login, register)
 - [x] Topic browsing page
-- [ ] Item search & display
+- [x] Item search & display
 - [ ] Rating component (5 stars)
 - [x] User profile page structure
 

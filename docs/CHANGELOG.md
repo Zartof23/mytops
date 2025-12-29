@@ -122,6 +122,65 @@ Initial project concept used n8n as orchestrator and DynamoDB as database. Decis
 
 ---
 
+## [2025-12-29] Item Search Feature
+
+### Feature: TopicDetailPage with Item Search
+
+**What**: New page at `/topics/:slug` displaying topic details and allowing users to search for items within that topic.
+
+**Files Created**:
+- `frontend/src/pages/TopicDetailPage.tsx` - Main page component
+- `frontend/src/components/ItemCard.tsx` - Reusable item card component
+
+**Files Modified**:
+- `frontend/src/App.tsx` - Added route for `/topics/:slug`
+
+**Implementation Details**:
+- Topic header shows icon, name, and description
+- Search input filters items by name (case-insensitive via Supabase `.ilike()`)
+- Items displayed in responsive grid (2 cols mobile, 3 cols desktop)
+- ItemCard shows name, truncated description, optional image, and source badge
+- Source badges: Curated (blue), AI (purple), User (green)
+- Empty states with personality copy
+- Accessible: keyboard navigation on cards, screen reader labels
+
+**Security**:
+- RLS policies handle access control (public read for items/topics)
+- Search queries use Supabase parameterized queries (no SQL injection risk)
+
+**Next Steps**:
+- Rating component to add items to user's preferables
+- AI enrichment when search returns no results
+
+---
+
+## [2025-12-29] Search Debouncing Optimization
+
+### Optimization: Debounced Search Input
+
+**Problem**: Every keystroke triggered a Supabase API call, causing unnecessary load and potential rate limiting.
+
+**Solution**: Implemented debouncing - delays API call until 300ms after user stops typing.
+
+**Files Created**:
+- `frontend/src/lib/hooks.ts` - `useDebouncedValue` custom hook
+
+**Files Modified**:
+- `frontend/src/pages/TopicDetailPage.tsx` - Uses debounced search query
+
+**Implementation Details**:
+- `useDebouncedValue<T>(value, delay)` hook using `useEffect` + `setTimeout`
+- Cleanup function cancels pending timers on each keystroke
+- 300ms delay (standard for search inputs)
+- Visual "Searching..." indicator while query is pending
+- Input remains responsive (controlled), only API call is debounced
+
+**References**:
+- [React Debounce Best Practices](https://www.developerway.com/posts/debouncing-in-react)
+- [OpenReplay Debounce Strategies](https://blog.openreplay.com/optimizing-api-calls-react-debounce-strategies/)
+
+---
+
 ## Future Considerations
 
 Items discussed but deferred for post-MVP:

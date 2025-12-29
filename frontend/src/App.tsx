@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { TopicsPage } from './pages/TopicsPage'
+import { TopicDetailPage } from './pages/TopicDetailPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { AuthCallback } from './pages/AuthCallback'
 
@@ -31,6 +32,7 @@ function App() {
         <Route path="login" element={<LoginPage />} />
         <Route path="register" element={<RegisterPage />} />
         <Route path="topics" element={<TopicsPage />} />
+        <Route path="topics/:slug" element={<TopicDetailPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
       <Route path="/auth/callback" element={<AuthCallback />} />

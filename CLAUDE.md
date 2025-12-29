@@ -424,9 +424,9 @@ User profile shows preferables organized by topic
 - [x] Authentication UI (Login, Register pages)
 - [x] Topic browsing page
 - [x] User profile page structure
+- [x] Item search within topics (TopicDetailPage)
 
 ### In Progress
-- [ ] Item search within topics
 - [ ] Rating component (5 stars)
 - [ ] AI enrichment Edge Functions
 
