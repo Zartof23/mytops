@@ -1,0 +1,76 @@
+# ========================================
+# SECURITY - NEVER COMMIT THESE
+# ========================================
+.env
+.env.local
+.env.*.local
+.env.production
+*.pem
+*.key
+
+# Supabase
+# Service role key and other secrets should ONLY be in Supabase Dashboard
+# Never store SUPABASE_SERVICE_ROLE_KEY or ANTHROPIC_API_KEY in files
+
+# ========================================
+# Node.js
+# ========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ========================================
+# Frontend build
+# ========================================
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+
+# ========================================
+# Supabase Local Development
+# ========================================
+supabase/.branches/
+supabase/.temp/
+
+# ========================================
+# IDE & Editors
+# ========================================
+.vscode/
+.idea/
+
+# ========================================
+# Claude Code & MCP
+# ========================================
+.claude/
+.mcp.json
+*.swp
+*.swo
+*~
+
+# ========================================
+# OS Files
+# ========================================
+.DS_Store
+Thumbs.db
+
+# ========================================
+# Logs
+# ========================================
+logs/
+*.log
+
+# ========================================
+# Temporary files
+# ========================================
+*.tmp
+*.temp
+
+# ========================================
+# Package manager locks
+# (uncomment if you want to commit these)
+# ========================================
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
