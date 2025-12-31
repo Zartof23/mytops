@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "mytops",
-  "main": "index.html",
   "compatibility_date": "2025-12-31",
   "assets": {
     "directory": "./dist",
