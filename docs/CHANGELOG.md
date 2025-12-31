@@ -305,13 +305,48 @@ To complete OAuth setup:
 
 ---
 
-## Future Considerations
+## [2025-12-31] Code Quality & Route Guards
 
-Items discussed but deferred for post-MVP:
+### Refactor: Route Protection & Code Quality Improvements
 
-- Additional OAuth providers (Apple, Discord, Twitter)
-- Public shareable "Top X" lists
-- Follow/social features
-- Topic creation by users
-- Firecrawl/Brave Search MCP for enhanced AI enrichment
-- Recommendation engine
+**What**: Comprehensive code quality audit and fixes including proper route guards, shared components, and memory leak fixes.
+
+**Files Created**:
+- `frontend/src/components/RouteGuards.tsx` - ProtectedRoute and PublicOnlyRoute components
+- `frontend/src/components/OAuthButtons.tsx` - Shared OAuth buttons and icons
+- `frontend/src/components/ErrorBoundary.tsx` - Global error boundary with brand voice
+
+**Files Modified**:
+- `frontend/src/App.tsx` - Integrated route guards and auth cleanup
+- `frontend/src/pages/ProfilePage.tsx` - Removed band-aid redirect, fixed `any` types
+- `frontend/src/pages/LoginPage.tsx` - Uses shared OAuth components
+- `frontend/src/pages/RegisterPage.tsx` - Uses shared OAuth components
+- `frontend/src/store/authStore.ts` - Fixed memory leak with subscription cleanup
+- `frontend/src/main.tsx` - Wrapped app with ErrorBoundary
+
+**Implementation Details**:
+
+**Route Guards**:
+- `ProtectedRoute`: Redirects to `/login` if not authenticated
+- `PublicOnlyRoute`: Redirects to `/` if already authenticated (prevents accessing /login when logged in)
+- Uses React Router's `<Outlet />` pattern for nested routing
+- Checks `initialized` state to avoid flash of wrong content
+
+**Shared Components**:
+- Extracted `GoogleIcon` and `GitHubIcon` SVG components
+- Created `OAuthButtons` component with loading states
+- Created `OAuthDivider` component
+- Reduced code duplication between LoginPage and RegisterPage
+
+**Memory Leak Fix**:
+- Auth subscription stored externally to Zustand store
+- `cleanup()` method added to unsubscribe on unmount
+- Prevents duplicate subscriptions on hot reload
+
+**Error Boundary**:
+- Class component catching React errors
+- Brand-appropriate error message: "Something broke. Honestly, I'm surprised it worked this long."
+- Shows error message in monospace font
+- "Try again" button to reset error state
+
+**Test Count**: 50 (unchanged)

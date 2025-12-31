@@ -456,8 +456,50 @@ User profile shows preferables organized by topic
 - [x] OAuth UI improvements (Google/GitHub icons, loading states, error handling)
 
 ### In Progress
-- [ ] OAuth provider configuration (requires Google Cloud Console + GitHub OAuth App setup)
 - [ ] AI enrichment Edge Functions
+
+### Completed Recently
+- [x] OAuth provider configuration (Google + GitHub)
+- [x] Route guards (ProtectedRoute, PublicOnlyRoute)
+- [x] Error Boundary component
+- [x] Auth subscription memory leak fix
+- [x] Shared OAuth components extraction
+- [x] Cloudflare Pages deployment (https://mytops.io)
+
+---
+
+## Roadmap
+
+### Phase 2 (Next MVP)
+
+**Profile Customization (Monetization)**
+- Profile name customization behind payment wall
+- Integration: Stripe or BuyMeACoffee
+- Display name shown on public profile and ratings
+
+**Item Carousel Suggestions**
+- AI-powered recommendations based on user's favorites
+- "Because you liked X, you might enjoy Y" style suggestions
+- Horizontal carousel on topic pages or profile
+
+**UI/UX Rework**
+- Comprehensive design refresh using shadcn/ui MCP
+- Consistent design system implementation
+- Dark/light mode toggle
+- Improved mobile responsiveness
+- Micro-interactions and animations
+
+### Phase 3 (Future)
+
+- Additional OAuth providers (Apple, Discord, Twitter)
+- Public shareable "Top X" lists
+- Follow/social features
+- Topic creation by users
+- Firecrawl/Brave Search MCP for enhanced AI enrichment
+- Advanced recommendation engine
+- Mobile app (React Native or PWA)
+
+---
 
 ## Documentation
 

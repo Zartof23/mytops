@@ -1,29 +1,39 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { StarRating } from '../components/StarRating'
-import type { UserRating, Topic } from '../types'
+import type { Item, Topic } from '../types'
+
+interface RatingWithItem {
+  id: string
+  user_id: string
+  item_id: string
+  rating: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  item: Item & { topic: Topic }
+}
 
 interface RatingsByTopic {
   topic: Topic
-  ratings: UserRating[]
+  ratings: Array<{
+    id: string
+    rating: number
+    notes: string | null
+    item: Item
+  }>
 }
 
 export function ProfilePage() {
-  const navigate = useNavigate()
   const { user } = useAuthStore()
   const [ratingsByTopic, setRatingsByTopic] = useState<RatingsByTopic[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login')
-      return
-    }
+    if (!user) return
 
     async function fetchRatings() {
-      // Fetch user's ratings with item and topic info
       const { data: ratings, error } = await supabase
         .from('user_ratings')
         .select(`
@@ -45,18 +55,22 @@ export function ProfilePage() {
       // Group ratings by topic
       const grouped: Record<string, RatingsByTopic> = {}
 
-      for (const rating of ratings || []) {
-        const item = rating.item as any
-        const topic = item?.topic as Topic
+      for (const rating of (ratings as RatingWithItem[]) || []) {
+        const item = rating.item
+        const topic = item?.topic
 
         if (!topic) continue
 
         if (!grouped[topic.id]) {
           grouped[topic.id] = { topic, ratings: [] }
         }
+        // Extract topic from item to avoid storing it redundantly
+        const { topic: _topic, ...itemWithoutTopic } = item
         grouped[topic.id].ratings.push({
-          ...rating,
-          item: { ...item, topic: undefined }
+          id: rating.id,
+          rating: rating.rating,
+          notes: rating.notes,
+          item: itemWithoutTopic
         })
       }
 
@@ -65,11 +79,7 @@ export function ProfilePage() {
     }
 
     fetchRatings()
-  }, [user, navigate])
-
-  if (!user) {
-    return null
-  }
+  }, [user])
 
   if (loading) {
     return (
