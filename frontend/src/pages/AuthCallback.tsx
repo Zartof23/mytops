@@ -9,6 +9,8 @@ export function AuthCallback() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let isMounted = true
+
     // Check for error in URL params (OAuth error)
     const errorParam = searchParams.get('error')
     const errorDescription = searchParams.get('error_description')
@@ -18,19 +20,33 @@ export function AuthCallback() {
       return
     }
 
-    // Set up auth state listener
+    // Check if already signed in (session might already exist)
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session && isMounted) {
+        navigate('/')
+      }
+    }
+
+    // Check immediately
+    checkSession()
+
+    // Also listen for auth state changes (in case session is still being processed)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      if (event === 'SIGNED_IN' && session && isMounted) {
         navigate('/')
       }
     })
 
-    // Timeout fallback - if nothing happens after 10 seconds, show error
+    // Timeout fallback
     const timeout = setTimeout(() => {
-      setError('Sign in is taking too long. Please try again.')
+      if (isMounted) {
+        setError('Sign in is taking too long. Please try again.')
+      }
     }, 10000)
 
     return () => {
+      isMounted = false
       subscription.unsubscribe()
       clearTimeout(timeout)
     }

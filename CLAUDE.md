@@ -101,6 +101,7 @@ npm run test:coverage # Run with coverage report
 - `StarRating` component (18 tests)
 - `ItemCard` component (16 tests)
 - `ratingService` (8 tests)
+- `AuthCallback` page (8 tests)
 
 ### Database
 

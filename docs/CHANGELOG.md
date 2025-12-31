@@ -181,6 +181,32 @@ Initial project concept used n8n as orchestrator and DynamoDB as database. Decis
 
 ---
 
+## [2025-12-31] AuthCallback Session Fix
+
+### Fix: OAuth Callback Infinite Loading
+
+**Problem**: After successful OAuth login, the `/auth/callback` page would show infinite loading until timeout, even though the user was actually logged in.
+
+**Root Cause**: The `onAuthStateChange` listener was set up after the auth state had already changed. By the time the component mounted, Supabase had already processed the OAuth callback.
+
+**Solution**: Check for existing session immediately on component mount, in addition to listening for auth state changes.
+
+**Files Modified**:
+- `frontend/src/pages/AuthCallback.tsx` - Added immediate session check on mount
+
+**Tests Added**:
+- `frontend/src/pages/AuthCallback.test.tsx` - 8 tests covering:
+  - Loading state display
+  - Error param handling from URL
+  - Existing session detection
+  - Auth state change handling
+  - Cleanup on unmount
+  - Back to login navigation
+
+**Test Count**: 50 total (was 42)
+
+---
+
 ## [2025-12-29] OAuth UI Improvements
 
 ### Feature: Enhanced OAuth Buttons & Error Handling
