@@ -305,6 +305,90 @@ To complete OAuth setup:
 
 ---
 
+## [2025-12-31] UI/UX Rework with shadcn/ui
+
+### Feature: Complete Frontend Design Refresh
+
+**What**: Comprehensive UI/UX overhaul using shadcn/ui components with a monochrome color scheme, maintaining the "backend dev who doesn't do frontend" personality.
+
+**Design Principles**:
+- Sharp & Minimal: Clean lines, no unnecessary decoration
+- Monochrome: Black, white, and grays only (neutral palette)
+- Dev Vibe: Self-deprecating humor in toast messages and copy
+- Functional: Every element serves a purpose
+
+**Files Created** (shadcn/ui components):
+- `frontend/src/components/ui/button.tsx`
+- `frontend/src/components/ui/card.tsx`
+- `frontend/src/components/ui/input.tsx`
+- `frontend/src/components/ui/badge.tsx`
+- `frontend/src/components/ui/skeleton.tsx`
+- `frontend/src/components/ui/sonner.tsx` (toast notifications)
+- `frontend/src/components/ui/separator.tsx`
+- `frontend/src/components/ui/tooltip.tsx`
+- `frontend/src/components/ui/label.tsx`
+- `frontend/src/lib/utils.ts` (cn utility for class merging)
+- `frontend/components.json` (shadcn configuration)
+
+**Files Modified**:
+- `frontend/src/index.css` - Monochrome CSS variables (HSL-based)
+- `frontend/src/components/Layout.tsx` - shadcn Button, Separator, added Toaster
+- `frontend/src/components/ItemCard.tsx` - Card, Badge, toast notifications
+- `frontend/src/components/StarRating.tsx` - Monochrome stars (fill-foreground instead of yellow)
+- `frontend/src/components/ThemeToggle.tsx` - shadcn Button ghost/icon variant
+- `frontend/src/components/OAuthButtons.tsx` - shadcn Button outline variant
+- `frontend/src/pages/HomePage.tsx` - Card, Button, Separator components
+- `frontend/src/pages/TopicsPage.tsx` - Card, Skeleton loading states
+- `frontend/src/pages/TopicDetailPage.tsx` - Input, Skeleton, Card, Loader2
+- `frontend/src/pages/LoginPage.tsx` - Card wrapper, Input, Label, Button, toast
+- `frontend/src/pages/RegisterPage.tsx` - Card wrapper, Input, Label, Button, toast
+- `frontend/src/pages/ProfilePage.tsx` - Card, Skeleton, Separator
+- `frontend/tsconfig.json` - Path alias for @/ imports
+- `frontend/tsconfig.app.json` - Path alias for @/ imports
+- `frontend/vite.config.ts` - Path alias resolution
+- `frontend/vitest.config.ts` - Path alias for tests
+
+**Configuration Changes**:
+- shadcn style: `new-york` (sharper, more minimal)
+- Base color: `neutral` (monochrome grays)
+- Path alias: `@/` maps to `src/`
+
+**Toast Messages** (with dev humor):
+| Event | Message |
+|-------|---------|
+| Rating saved | "Noted. Your taste is... interesting." |
+| Rating failed | "Couldn't save that. The database is judging you." |
+| Login success | "Welcome back. The database missed you." |
+| Login failed | "Wrong credentials. Or maybe I broke something." |
+| Network error | "Can't reach the server. It's probably my fault." |
+
+**Skeleton Loading States Added**:
+- Topics grid: Placeholder cards during fetch
+- Items grid: Placeholder cards with image areas
+- Profile page: Topic sections with rating placeholders
+
+**Bug Fixes During Implementation**:
+- Removed Next.js-specific `next-themes` dependency from sonner.tsx
+- Replaced with MutationObserver-based theme detection
+- Removed unnecessary `"use client"` directives (Vite doesn't need them)
+- Fixed vitest path alias configuration
+
+**Dependencies Added**:
+- `class-variance-authority` - For component variants
+- `clsx` - Class name utility
+- `tailwind-merge` - Intelligent Tailwind class merging
+- `sonner` - Toast notification library
+- `@radix-ui/*` - Accessible UI primitives (via shadcn)
+
+**Dependencies Removed**:
+- `next-themes` - Not needed for Vite projects
+
+**Test Impact**: All 50 tests pass. One test updated to work with new Separator component structure.
+
+**Build Size**: 496KB (acceptable for full shadcn integration)
+
+---
+
 ## [2025-12-31] Code Quality & Route Guards
 
 ### Refactor: Route Protection & Code Quality Improvements

@@ -257,8 +257,10 @@ describe('ItemCard', () => {
         expect(ratingService.getUserRating).toHaveBeenCalled()
       })
 
-      // Get the rating wrapper div and click directly on it
-      const ratingWrapper = container.querySelector('.border-t')
+      // Get the rating wrapper div (parent of the star rating group) and click directly on it
+      const starRatingGroup = container.querySelector('[role="group"]')
+      expect(starRatingGroup).toBeInTheDocument()
+      const ratingWrapper = starRatingGroup?.parentElement
       expect(ratingWrapper).toBeInTheDocument()
 
       // Use fireEvent for more direct control

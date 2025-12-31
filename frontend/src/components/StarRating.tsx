@@ -100,8 +100,8 @@ export function StarRating({
                 sizeClasses[size],
                 'transition-colors',
                 isFilled
-                  ? 'fill-yellow-400 text-yellow-400'
-                  : 'fill-transparent text-muted-foreground'
+                  ? 'fill-foreground text-foreground'
+                  : 'fill-transparent text-muted-foreground/50'
               )}
             />
           </button>

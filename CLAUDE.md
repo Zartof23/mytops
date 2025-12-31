@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **IMPORTANT**: The Development Guidelines section below is **MANDATORY** and must be followed for **EVERY task**, no exceptions. Before starting any work, review Security Standards and Testing Standards. After completing any work, update documentation and CHANGELOG.md.
+
 ## Project Overview
 
 **mytops** is a platform that enables users to track and share their favorite things, powered by AI-driven database generation. The core innovation is a **self-building database**: when users search for items that don't exist, AI automatically generates structured data and adds it to the database.
@@ -31,8 +33,8 @@ The app has a "backend developer who reluctantly built a frontend" vibe with sel
 | **Backend Logic** | Supabase Edge Functions (Deno/TypeScript) |
 | **Background Jobs** | pg_cron + pg_net |
 | **AI Provider** | Claude API (Anthropic) |
-| **Frontend** | React 18 + TypeScript + Vite |
-| **Styling** | Tailwind CSS + shadcn/ui |
+| **Frontend** | React 19 + TypeScript + Vite |
+| **Styling** | Tailwind CSS + shadcn/ui (new-york style, neutral palette) |
 | **State Management** | Zustand |
 
 ### Database Schema
@@ -54,14 +56,22 @@ mytops/
 │   └── CHANGELOG.md          # Decision log
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # UI components (Layout, StarRating, ItemCard)
+│   │   ├── components/
+│   │   │   ├── ui/           # shadcn/ui primitives (button, card, input, etc.)
+│   │   │   ├── Layout.tsx    # Main layout with header, nav, footer
+│   │   │   ├── ItemCard.tsx  # Item display with rating
+│   │   │   ├── StarRating.tsx # 5-star rating component
+│   │   │   └── ...           # Other components
 │   │   ├── pages/            # Route pages
 │   │   ├── services/         # API service layer (ratingService)
-│   │   ├── hooks/            # Custom React hooks (useDebouncedValue)
 │   │   ├── test/             # Test utilities (setup.ts, utils.tsx)
 │   │   ├── lib/
-│   │   │   └── supabase.ts   # Supabase client
-│   │   └── store/            # Zustand stores
+│   │   │   ├── supabase.ts   # Supabase client
+│   │   │   ├── hooks.ts      # Custom React hooks
+│   │   │   └── utils.ts      # Utility functions (cn)
+│   │   ├── store/            # Zustand stores
+│   │   └── types/            # TypeScript types
+│   ├── components.json       # shadcn/ui configuration
 │   ├── vitest.config.ts      # Test configuration
 │   └── tailwind.config.js
 ├── .env.example              # Environment template
@@ -141,7 +151,24 @@ All tables have Row Level Security (RLS) enabled. See `docs/ARCHITECTURE_PLAN.md
 
 ## Development Guidelines
 
-> **CRITICAL**: These guidelines are mandatory for every task. No exceptions.
+> **CRITICAL**: These guidelines are **MANDATORY** for **EVERY** task. No exceptions. Claude MUST follow these before, during, and after any implementation.
+
+### Pre-Task Checklist (ALWAYS DO FIRST)
+
+Before starting ANY task:
+- [ ] Read and understand the relevant sections of this document
+- [ ] Review Security Standards for potential hazards
+- [ ] Check existing patterns in the codebase
+- [ ] Plan the implementation approach
+
+### Post-Task Checklist (ALWAYS DO AFTER)
+
+After completing ANY task:
+- [ ] Run tests: `npm run test:run`
+- [ ] Run build: `npm run build`
+- [ ] Update CHANGELOG.md with what changed and why
+- [ ] Update this CLAUDE.md if architecture/patterns changed
+- [ ] Review for security implications
 
 ### Core Principles
 
@@ -465,6 +492,7 @@ User profile shows preferables organized by topic
 - [x] Auth subscription memory leak fix
 - [x] Shared OAuth components extraction
 - [x] Cloudflare Pages deployment (https://mytops.io)
+- [x] UI/UX rework with shadcn/ui (monochrome theme, toast notifications)
 
 ---
 
@@ -481,13 +509,6 @@ User profile shows preferables organized by topic
 - AI-powered recommendations based on user's favorites
 - "Because you liked X, you might enjoy Y" style suggestions
 - Horizontal carousel on topic pages or profile
-
-**UI/UX Rework**
-- Comprehensive design refresh using shadcn/ui MCP
-- Consistent design system implementation
-- Dark/light mode toggle
-- Improved mobile responsiveness
-- Micro-interactions and animations
 
 ### Phase 3 (Future)
 

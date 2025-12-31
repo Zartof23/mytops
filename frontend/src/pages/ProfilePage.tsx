@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { StarRating } from '../components/StarRating'
+import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Separator } from '@/components/ui/separator'
 import type { Item, Topic } from '../types'
 
 interface RatingWithItem {
@@ -23,6 +26,25 @@ interface RatingsByTopic {
     notes: string | null
     item: Item
   }>
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-6">
+      {[...Array(2)].map((_, i) => (
+        <div key={i}>
+          <div className="flex items-center gap-2 mb-4">
+            <Skeleton className="h-6 w-6 rounded" />
+            <Skeleton className="h-5 w-24" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function ProfilePage() {
@@ -65,7 +87,8 @@ export function ProfilePage() {
           grouped[topic.id] = { topic, ratings: [] }
         }
         // Extract topic from item to avoid storing it redundantly
-        const { topic: _topic, ...itemWithoutTopic } = item
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { topic: _, ...itemWithoutTopic } = item
         grouped[topic.id].ratings.push({
           id: rating.id,
           rating: rating.rating,
@@ -83,56 +106,59 @@ export function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Loading your favorites...</p>
+      <div className="max-w-4xl mx-auto">
+        <Skeleton className="h-7 w-40 mb-2" />
+        <Skeleton className="h-4 w-64 mb-8" />
+        <ProfileSkeleton />
       </div>
     )
   }
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Your Preferables</h1>
-      <p className="text-muted-foreground mb-8">
+      <h1 className="text-xl font-bold mb-1">Your Preferables</h1>
+      <p className="text-sm text-muted-foreground mb-6">
         Everything you've rated, organized by topic.
       </p>
 
       {ratingsByTopic.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg">
+        <Card className="p-8 text-center">
           <p className="text-muted-foreground mb-2">
             You haven't rated anything yet.
           </p>
-          <p className="text-sm text-muted-foreground italic">
+          <p className="text-xs text-muted-foreground italic">
             Go find something you love and give it some stars.
           </p>
-        </div>
+        </Card>
       ) : (
-        <div className="space-y-8">
-          {ratingsByTopic.map(({ topic, ratings }) => (
+        <div className="space-y-6">
+          {ratingsByTopic.map(({ topic, ratings }, index) => (
             <div key={topic.id}>
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              {index > 0 && <Separator className="mb-6" />}
+              <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
                 <span>{topic.icon}</span>
                 <span>{topic.name}</span>
-                <span className="text-sm text-muted-foreground font-normal">
+                <span className="text-xs text-muted-foreground font-normal">
                   ({ratings.length})
                 </span>
               </h2>
 
-              <div className="grid gap-3">
+              <div className="space-y-2">
                 {ratings.map((rating) => (
-                  <div
+                  <Card
                     key={rating.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
+                    className="flex items-center justify-between p-3"
                   >
-                    <div>
-                      <p className="font-medium">{rating.item?.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{rating.item?.name}</p>
                       {rating.notes && (
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
                           {rating.notes}
                         </p>
                       )}
                     </div>
                     <StarRating value={rating.rating} readOnly size="sm" />
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>

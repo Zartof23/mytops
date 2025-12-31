@@ -1,75 +1,71 @@
 import { Outlet, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { ThemeToggle } from './ThemeToggle'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Toaster } from '@/components/ui/sonner'
 
 export function Layout() {
   const { user, signOut } = useAuthStore()
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="text-xl font-bold">
+        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+          <Link to="/" className="text-lg font-bold tracking-tight">
             mytops
           </Link>
 
-          <nav className="flex items-center gap-6">
-            <Link
-              to="/topics"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Topics
-            </Link>
+          <nav className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/topics">Topics</Link>
+            </Button>
 
             {user ? (
               <>
-                <Link
-                  to="/profile"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Profile
-                </Link>
-                <button
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/profile">Profile</Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => signOut()}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Sign out
-                </button>
+                </Button>
               </>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className="text-sm px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                >
-                  Sign up
-                </Link>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/login">Login</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to="/register">Sign up</Link>
+                </Button>
               </>
             )}
 
+            <Separator orientation="vertical" className="mx-2 h-4" />
             <ThemeToggle />
           </nav>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <Outlet />
       </main>
 
       {/* Footer */}
-      <footer className="border-t mt-auto">
-        <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
+      <footer className="border-t">
+        <div className="container mx-auto px-4 py-4 text-center text-xs text-muted-foreground">
           <p>Built by a backend dev who doesn't usually do frontend.</p>
         </div>
       </footer>
+
+      {/* Toast notifications */}
+      <Toaster position="bottom-right" />
     </div>
   )
 }

@@ -3,7 +3,26 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useDebouncedValue } from '../lib/hooks'
 import { ItemCard } from '../components/ItemCard'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Loader2 } from 'lucide-react'
 import type { Topic, Item } from '../types'
+
+function ItemsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {[...Array(6)].map((_, i) => (
+        <Card key={i} className="p-4">
+          <Skeleton className="h-32 w-full mb-3" />
+          <Skeleton className="h-4 w-3/4 mb-2" />
+          <Skeleton className="h-3 w-1/2" />
+        </Card>
+      ))}
+    </div>
+  )
+}
 
 export function TopicDetailPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -88,8 +107,16 @@ export function TopicDetailPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Loading topic...</p>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Skeleton className="h-10 w-10 rounded" />
+            <Skeleton className="h-7 w-32" />
+          </div>
+          <Skeleton className="h-4 w-48" />
+        </div>
+        <Skeleton className="h-10 w-full mb-6" />
+        <ItemsSkeleton />
       </div>
     )
   }
@@ -97,17 +124,16 @@ export function TopicDetailPage() {
   // Error state
   if (error || !topic) {
     return (
-      <div className="text-center py-12">
-        <p className="text-destructive mb-2">Topic not found</p>
-        <p className="text-sm text-muted-foreground mb-4">
-          {error || "Maybe it ran away. Topics do that sometimes."}
-        </p>
-        <Link
-          to="/topics"
-          className="text-sm text-primary hover:underline"
-        >
-          Back to topics
-        </Link>
+      <div className="max-w-4xl mx-auto">
+        <Card className="p-8 text-center">
+          <p className="text-destructive mb-2 font-medium">Topic not found</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {error || "Maybe it ran away. Topics do that sometimes."}
+          </p>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/topics">Back to topics</Link>
+          </Button>
+        </Card>
       </div>
     )
   }
@@ -115,32 +141,29 @@ export function TopicDetailPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Topic Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          {topic.icon && <span className="text-4xl">{topic.icon}</span>}
-          <h1 className="text-2xl font-bold">{topic.name}</h1>
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          {topic.icon && <span className="text-3xl">{topic.icon}</span>}
+          <h1 className="text-xl font-bold">{topic.name}</h1>
         </div>
         {topic.description && (
-          <p className="text-muted-foreground">{topic.description}</p>
+          <p className="text-sm text-muted-foreground">{topic.description}</p>
         )}
       </div>
 
       {/* Search Input */}
       <div className="mb-6 relative">
-        <label htmlFor="search" className="sr-only">
-          Search {topic.name.toLowerCase()}
-        </label>
-        <input
+        <Input
           id="search"
           type="text"
           placeholder={`Search ${topic.name.toLowerCase()}...`}
           value={searchQuery}
           onChange={handleSearchChange}
-          className="w-full px-4 py-3 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+          className="h-10"
         />
         {searching && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-            Searching...
+          <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </span>
         )}
       </div>
@@ -153,18 +176,18 @@ export function TopicDetailPage() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-12 border rounded-lg">
-          <p className="text-muted-foreground mb-2">
+        <Card className="p-8 text-center">
+          <p className="text-muted-foreground mb-2 text-sm">
             {searchQuery
               ? `No results for "${searchQuery}"`
               : 'No items yet. Be the first to search for something.'}
           </p>
-          <p className="text-sm text-muted-foreground italic">
+          <p className="text-xs text-muted-foreground italic">
             {searchQuery
               ? "Try a different search. I promise I'm looking."
               : 'The database grows with every search. In theory.'}
           </p>
-        </div>
+        </Card>
       )}
     </div>
   )

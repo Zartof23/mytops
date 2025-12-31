@@ -3,6 +3,10 @@ import type { Item } from '../types'
 import { StarRating } from './StarRating'
 import { useAuthStore } from '../store/authStore'
 import { ratingService } from '../services/ratingService'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { toast } from 'sonner'
 
 interface ItemCardProps {
   item: Item
@@ -12,18 +16,9 @@ interface ItemCardProps {
 }
 
 const sourceBadges = {
-  seed: {
-    label: 'Curated',
-    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-  },
-  ai_generated: {
-    label: 'AI',
-    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-  },
-  user_submitted: {
-    label: 'User',
-    className: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-  }
+  seed: { label: 'Curated', variant: 'secondary' as const },
+  ai_generated: { label: 'AI', variant: 'outline' as const },
+  user_submitted: { label: 'User', variant: 'default' as const }
 } as const
 
 export function ItemCard({ item, onClick, showRating = true }: ItemCardProps) {
@@ -64,7 +59,9 @@ export function ItemCard({ item, onClick, showRating = true }: ItemCardProps) {
     if (error) {
       // Rollback on error
       setUserRating(previousRating)
-      console.error('Failed to save rating:', error)
+      toast.error("Couldn't save that. Try again?")
+    } else {
+      toast.success("Noted. Your taste is... interesting.")
     }
 
     setIsLoading(false)
@@ -83,9 +80,9 @@ export function ItemCard({ item, onClick, showRating = true }: ItemCardProps) {
   }
 
   return (
-    <div
+    <Card
       onClick={handleCardClick}
-      className="p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer"
+      className="p-4 hover:bg-accent/50 transition-colors cursor-pointer"
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? handleCardKeyDown : undefined}
@@ -99,40 +96,42 @@ export function ItemCard({ item, onClick, showRating = true }: ItemCardProps) {
       )}
 
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold line-clamp-1">{item.name}</h3>
+        <h3 className="font-semibold line-clamp-1 text-sm">{item.name}</h3>
         {badge && (
-          <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${badge.className}`}>
+          <Badge variant={badge.variant} className="text-[10px] px-1.5 py-0">
             {badge.label}
-          </span>
+          </Badge>
         )}
       </div>
 
       {item.description && (
-        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
           {item.description}
         </p>
       )}
 
       {showRating && (
-        <div
-          className="mt-3 pt-3 border-t"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <StarRating
-            value={userRating}
-            onChange={user ? handleRatingChange : undefined}
-            disabled={isLoading}
-            size="sm"
-            readOnly={!user}
-          />
-          {!user && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Sign in to rate
-            </p>
-          )}
-        </div>
+        <>
+          <Separator className="my-3" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <StarRating
+              value={userRating}
+              onChange={user ? handleRatingChange : undefined}
+              disabled={isLoading}
+              size="sm"
+              readOnly={!user}
+            />
+            {!user && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Sign in to rate
+              </p>
+            )}
+          </div>
+        </>
       )}
-    </div>
+    </Card>
   )
 }
