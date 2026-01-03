@@ -4,6 +4,58 @@ All notable decisions and changes to this project will be documented in this fil
 
 ---
 
+## [2026-01-03] Documentation Restructure
+
+### Context
+CLAUDE.md had grown to ~4.6k tokens with mixed concerns (core reference, development guidelines, architecture, roadmap). This caused:
+- High token usage on every conversation
+- Difficulty finding relevant information
+- Outdated/incorrect information (e.g., claiming migrations aren't stored locally when they are)
+- Unclear "what can users do NOW" vs. future plans
+
+### Decision: Split Documentation into Focused Files
+
+**What Changed**:
+- **CLAUDE.md** (new, ~2.5k tokens): Core reference with current E2E flows, quick start, key patterns
+- **docs/DEVELOPMENT_GUIDELINES.md** (new): Mandatory standards, security, testing, code patterns
+- **docs/ROADMAP.md** (new): Current capabilities and future MVPs with clear user flows
+- **docs/ARCHITECTURE.md** (new): Technical details, database schema, RLS policies, deployment
+
+**Rationale**:
+- **Performance**: Load only relevant documentation per task (e.g., only load DEVELOPMENT_GUIDELINES.md when implementing features)
+- **Clarity**: Each file has single responsibility
+- **Accuracy**: Fixed inaccuracies about local migrations and edge functions
+- **Maintainability**: Easier to update specific sections without affecting entire doc
+
+**Specific Fixes in CLAUDE.md**:
+1. **Line 82** (old): "Database migrations and Edge Functions are managed via Supabase Dashboard/MCP, not stored locally."
+   - **Fixed**: "Migrations are version-controlled locally in `supabase/migrations/`. Edge Functions are deployed via Supabase MCP tools and not stored locally."
+
+2. **Line 118** (old): "Database is managed via Supabase Dashboard or MCP tools. No local migration files."
+   - **Fixed**: Clarified local migrations workflow with proper commands
+
+3. **Lines 466-522** (old): Granular checklist of completed tasks mixed with "in progress"
+   - **Fixed**: Replaced with "What Users Can Do Now" section showing 4 working E2E flows and known limitations
+
+**New Structure Benefits**:
+- CLAUDE.md: Always loaded, provides core context and quick reference
+- DEVELOPMENT_GUIDELINES.md: Load when implementing features (security, testing, patterns)
+- ROADMAP.md: Load when planning features or discussing future work
+- ARCHITECTURE.md: Load when making architectural changes or debugging infrastructure
+
+**Migration for AI Agent**:
+- References updated throughout to point to new file locations
+- All content preserved, just reorganized
+- Original ARCHITECTURE_PLAN.md kept as reference (linked from new ARCHITECTURE.md)
+
+**Impact**:
+- Token usage: Reduced from ~4.6k to ~2.5k in default context
+- Improved clarity: Clear E2E flow descriptions for current capabilities
+- Accurate documentation: Fixed migration storage claims
+- Future-proof: Easier to maintain as project grows
+
+---
+
 ## [2025-12-28] Project Re-Architecture
 
 ### Context
