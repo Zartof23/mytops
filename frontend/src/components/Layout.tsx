@@ -12,6 +12,14 @@ export function Layout() {
   return (
     <TooltipProvider>
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Skip to main content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:border focus:rounded-md focus:text-sm focus:font-medium"
+      >
+        Skip to main content
+      </a>
+
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
@@ -19,7 +27,7 @@ export function Layout() {
             mytops
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1" aria-label="Main navigation">
             <Button variant="ghost" size="sm" asChild>
               <Link to="/topics">Topics</Link>
             </Button>
@@ -55,7 +63,7 @@ export function Layout() {
       </header>
 
       {/* Main content */}
-      <main className="container mx-auto px-4 py-8 flex-1">
+      <main id="main-content" className="container mx-auto px-4 py-8 flex-1">
         <Outlet />
       </main>
 

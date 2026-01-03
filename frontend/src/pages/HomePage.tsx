@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { Star } from 'lucide-react'
+import { Star, Pause, Play } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { statsService, type PopularItem } from '../services/statsService'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,10 +21,15 @@ export function HomePage() {
   const [popularItems, setPopularItems] = useState<PopularItem[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [isPaused, setIsPaused] = useState(false)
   const prefersReducedMotion = useReducedMotion()
 
   // Prevent duplicate fetch on React StrictMode
   const hasFetched = useRef(false)
+
+  const togglePause = useCallback(() => {
+    setIsPaused((prev) => !prev)
+  }, [])
 
   // Fetch popular items for the preview
   useEffect(() => {
@@ -41,16 +46,16 @@ export function HomePage() {
     fetchPopular()
   }, [])
 
-  // Auto-rotate carousel
+  // Auto-rotate carousel (respects pause and reduced motion)
   useEffect(() => {
-    if (popularItems.length === 0 || prefersReducedMotion) return
+    if (popularItems.length === 0 || prefersReducedMotion || isPaused) return
 
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % popularItems.length)
     }, 4000)
 
     return () => clearInterval(interval)
-  }, [popularItems.length, prefersReducedMotion])
+  }, [popularItems.length, prefersReducedMotion, isPaused])
 
   const currentItem = popularItems[currentIndex]
 
@@ -144,21 +149,41 @@ export function HomePage() {
                 </p>
               )}
 
-              {/* Carousel dots */}
+              {/* Carousel controls */}
               {popularItems.length > 1 && (
-                <div className="flex justify-center gap-1.5 mt-4">
-                  {popularItems.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentIndex(idx)}
-                      className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                        idx === currentIndex
-                          ? 'bg-foreground'
-                          : 'bg-muted-foreground/30'
-                      }`}
-                      aria-label={`Go to item ${idx + 1}`}
-                    />
-                  ))}
+                <div className="flex items-center justify-center gap-3 mt-4">
+                  {/* Pause/Play button */}
+                  <button
+                    type="button"
+                    onClick={togglePause}
+                    className="p-1 rounded-full hover:bg-muted transition-colors"
+                    aria-label={isPaused ? 'Play carousel' : 'Pause carousel'}
+                  >
+                    {isPaused ? (
+                      <Play className="w-3 h-3 text-muted-foreground" />
+                    ) : (
+                      <Pause className="w-3 h-3 text-muted-foreground" />
+                    )}
+                  </button>
+
+                  {/* Carousel dots */}
+                  <div className="flex gap-1.5" role="tablist" aria-label="Popular items">
+                    {popularItems.map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        role="tab"
+                        onClick={() => setCurrentIndex(idx)}
+                        className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                          idx === currentIndex
+                            ? 'bg-foreground'
+                            : 'bg-muted-foreground/30'
+                        }`}
+                        aria-label={`View ${item.name}`}
+                        aria-selected={idx === currentIndex}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </CardContent>
