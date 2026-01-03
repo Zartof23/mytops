@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -17,35 +18,55 @@ export function Pagination({
   disabled = false,
   className
 }: PaginationProps) {
+  const goToPrevious = useCallback(() => {
+    onPageChange(currentPage - 1)
+  }, [onPageChange, currentPage])
+
+  const goToNext = useCallback(() => {
+    onPageChange(currentPage + 1)
+  }, [onPageChange, currentPage])
+
   if (totalPages <= 1) return null
 
   return (
-    <div className={cn('flex items-center justify-center gap-2', className)}>
+    <nav
+      role="navigation"
+      aria-label="Pagination"
+      className={cn('flex items-center justify-center gap-2', className)}
+    >
       <Button
+        type="button"
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(currentPage - 1)}
+        onClick={goToPrevious}
         disabled={disabled || currentPage <= 1}
+        aria-label="Go to previous page"
         className="h-8"
       >
-        <ChevronLeft className="h-4 w-4 mr-1" />
+        <ChevronLeft className="h-4 w-4 mr-1" aria-hidden="true" />
         Previous
       </Button>
 
-      <span className="text-sm text-muted-foreground px-4 tabular-nums">
+      <span
+        className="text-sm text-muted-foreground px-4 tabular-nums"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         Page {currentPage} of {totalPages}
       </span>
 
       <Button
+        type="button"
         variant="outline"
         size="sm"
-        onClick={() => onPageChange(currentPage + 1)}
+        onClick={goToNext}
         disabled={disabled || currentPage >= totalPages}
+        aria-label="Go to next page"
         className="h-8"
       >
         Next
-        <ChevronRight className="h-4 w-4 ml-1" />
+        <ChevronRight className="h-4 w-4 ml-1" aria-hidden="true" />
       </Button>
-    </div>
+    </nav>
   )
 }

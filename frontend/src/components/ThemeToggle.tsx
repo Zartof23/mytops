@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -16,23 +16,27 @@ export function ThemeToggle() {
     }
   }, [])
 
-  const toggle = () => {
-    setIsDark(!isDark)
-    if (isDark) {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    } else {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    }
-  }
+  const toggle = useCallback(() => {
+    setIsDark((prev) => {
+      const newIsDark = !prev
+      if (newIsDark) {
+        document.documentElement.classList.add('dark')
+        localStorage.setItem('theme', 'dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+        localStorage.setItem('theme', 'light')
+      }
+      return newIsDark
+    })
+  }, [])
 
   return (
     <Button
+      type="button"
       variant="ghost"
       size="icon"
       onClick={toggle}
-      aria-label="Toggle theme"
+      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
     >
       {isDark ? (
         <Sun className="h-4 w-4" />

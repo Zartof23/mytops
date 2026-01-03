@@ -18,30 +18,32 @@ export const ratingService = {
    * Uses upsert to handle the UNIQUE(user_id, item_id) constraint.
    */
   async upsertRating(input: CreateRatingInput): Promise<RatingResult> {
-    const { data: { session } } = await supabase.auth.getSession()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
 
-    if (!session?.user) {
-      return { data: null, error: new Error('Must be authenticated to rate') }
-    }
+      if (!user) {
+        return { data: null, error: new Error('Must be authenticated to rate') }
+      }
 
-    const { data, error } = await supabase
-      .from('user_ratings')
-      .upsert(
-        {
-          user_id: session.user.id,
-          item_id: input.item_id,
-          rating: input.rating,
-          notes: input.notes || null,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id,item_id', ignoreDuplicates: false }
-      )
-      .select()
-      .single()
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .upsert(
+          {
+            user_id: user.id,
+            item_id: input.item_id,
+            rating: input.rating,
+            notes: input.notes || null,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'user_id,item_id', ignoreDuplicates: false }
+        )
+        .select()
+        .single()
 
-    return {
-      data: data as UserRating | null,
-      error: error ? new Error(error.message) : null
+      if (error) throw error
+      return { data: data as UserRating, error: null }
+    } catch (error) {
+      return { data: null, error: error as Error }
     }
   },
 
@@ -50,43 +52,52 @@ export const ratingService = {
    * Returns null if user hasn't rated the item.
    */
   async getUserRating(itemId: string): Promise<RatingResult> {
-    const { data: { session } } = await supabase.auth.getSession()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
 
-    if (!session?.user) {
-      return { data: null, error: null }
+      if (!user) {
+        return { data: null, error: null }
+      }
+
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('item_id', itemId)
+        .single()
+
+      // PGRST116 = no rows returned, which is not an error for our use case
+      if (error && error.code !== 'PGRST116') {
+        throw error
+      }
+
+      return { data: data as UserRating | null, error: null }
+    } catch (error) {
+      return { data: null, error: error as Error }
     }
-
-    const { data, error } = await supabase
-      .from('user_ratings')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('item_id', itemId)
-      .single()
-
-    // PGRST116 = no rows returned, which is not an error for our use case
-    if (error && error.code !== 'PGRST116') {
-      return { data: null, error: new Error(error.message) }
-    }
-
-    return { data: data as UserRating | null, error: null }
   },
 
   /**
    * Delete the current user's rating for an item.
    */
   async deleteRating(itemId: string): Promise<{ error: Error | null }> {
-    const { data: { session } } = await supabase.auth.getSession()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
 
-    if (!session?.user) {
-      return { error: new Error('Must be authenticated to delete rating') }
+      if (!user) {
+        return { error: new Error('Must be authenticated to delete rating') }
+      }
+
+      const { error } = await supabase
+        .from('user_ratings')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('item_id', itemId)
+
+      if (error) throw error
+      return { error: null }
+    } catch (error) {
+      return { error: error as Error }
     }
-
-    const { error } = await supabase
-      .from('user_ratings')
-      .delete()
-      .eq('user_id', session.user.id)
-      .eq('item_id', itemId)
-
-    return { error: error ? new Error(error.message) : null }
   }
 }

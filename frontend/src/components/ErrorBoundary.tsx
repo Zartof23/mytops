@@ -1,5 +1,6 @@
 import React, { Component } from 'react'
 import type { ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   children: ReactNode
@@ -45,12 +46,9 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="text-sm text-muted-foreground mb-6 font-mono bg-muted p-2 rounded">
               {this.state.error?.message || 'Unknown error'}
             </p>
-            <button
-              onClick={this.handleReset}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
+            <Button type="button" onClick={this.handleReset}>
               Try again
-            </button>
+            </Button>
           </div>
         </div>
       )

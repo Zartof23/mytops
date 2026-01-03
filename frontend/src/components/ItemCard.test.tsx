@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '../test/utils'
+import { render, screen, waitFor, fireEvent } from '../test/utils'
 import userEvent from '@testing-library/user-event'
 import { ItemCard } from './ItemCard'
 import { ratingService } from '../services/ratingService'
@@ -263,8 +263,7 @@ describe('ItemCard', () => {
       const ratingWrapper = starRatingGroup?.parentElement
       expect(ratingWrapper).toBeInTheDocument()
 
-      // Use fireEvent for more direct control
-      const { fireEvent } = await import('@testing-library/react')
+      // Use fireEvent for more direct control (already imported at top)
       fireEvent.click(ratingWrapper!)
 
       // Card onClick should not be triggered due to stopPropagation

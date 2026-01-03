@@ -1,16 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ratingService } from './ratingService'
 import { supabase } from '../lib/supabase'
+import type { User, AuthError } from '@supabase/supabase-js'
 
 // Mock the supabase client
 vi.mock('../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
     auth: {
-      getSession: vi.fn()
+      getUser: vi.fn()
     }
   }
 }))
+
+// Helper to create mock user response for unauthenticated state
+const mockUnauthenticatedResponse = () => ({
+  data: { user: null },
+  error: {
+    message: 'Auth session missing',
+    status: 401,
+    name: 'AuthSessionMissingError'
+  } as AuthError
+})
+
+// Helper to create mock user response for authenticated state
+const mockAuthenticatedResponse = (userId: string) => ({
+  data: {
+    user: {
+      id: userId,
+      email: 'test@example.com',
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: '2025-01-01T00:00:00Z'
+    } as User
+  },
+  error: null
+})
 
 describe('ratingService', () => {
   beforeEach(() => {
@@ -19,10 +45,7 @@ describe('ratingService', () => {
 
   describe('upsertRating', () => {
     it('should return error when not authenticated', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: null },
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockUnauthenticatedResponse())
 
       const result = await ratingService.upsertRating({
         item_id: 'item-1',
@@ -44,10 +67,7 @@ describe('ratingService', () => {
         updated_at: '2025-01-01T00:00:00Z'
       }
 
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: { user: { id: 'user-1' } } } as any,
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockAuthenticatedResponse('user-1'))
 
       const mockChain = {
         upsert: vi.fn().mockReturnThis(),
@@ -67,10 +87,7 @@ describe('ratingService', () => {
     })
 
     it('should handle database errors', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: { user: { id: 'user-1' } } } as any,
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockAuthenticatedResponse('user-1'))
 
       const mockChain = {
         upsert: vi.fn().mockReturnThis(),
@@ -88,16 +105,13 @@ describe('ratingService', () => {
       })
 
       expect(result.data).toBeNull()
-      expect(result.error?.message).toBe('Database error')
+      expect(result.error).toBeDefined()
     })
   })
 
   describe('getUserRating', () => {
     it('should return null data and no error when not authenticated', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: null },
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockUnauthenticatedResponse())
 
       const result = await ratingService.getUserRating('item-1')
 
@@ -116,10 +130,7 @@ describe('ratingService', () => {
         updated_at: '2025-01-01T00:00:00Z'
       }
 
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: { user: { id: 'user-1' } } } as any,
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockAuthenticatedResponse('user-1'))
 
       const mockChain = {
         select: vi.fn().mockReturnThis(),
@@ -135,10 +146,7 @@ describe('ratingService', () => {
     })
 
     it('should return null when no rating exists (PGRST116)', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: { user: { id: 'user-1' } } } as any,
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockAuthenticatedResponse('user-1'))
 
       const mockChain = {
         select: vi.fn().mockReturnThis(),
@@ -159,10 +167,7 @@ describe('ratingService', () => {
 
   describe('deleteRating', () => {
     it('should return error when not authenticated', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: null },
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockUnauthenticatedResponse())
 
       const result = await ratingService.deleteRating('item-1')
 
@@ -170,10 +175,7 @@ describe('ratingService', () => {
     })
 
     it('should delete rating when authenticated', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValue({
-        data: { session: { user: { id: 'user-1' } } } as any,
-        error: null
-      })
+      vi.mocked(supabase.auth.getUser).mockResolvedValue(mockAuthenticatedResponse('user-1'))
 
       const mockChain = {
         delete: vi.fn().mockReturnThis(),

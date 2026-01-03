@@ -32,6 +32,7 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
   return (
     <div className="mt-6 grid grid-cols-2 gap-3">
       <Button
+        type="button"
         variant="outline"
         onClick={() => signInWithGoogle()}
         disabled={isDisabled}
@@ -44,6 +45,7 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
         Google
       </Button>
       <Button
+        type="button"
         variant="outline"
         onClick={() => signInWithGithub()}
         disabled={isDisabled}
