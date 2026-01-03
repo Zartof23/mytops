@@ -15,7 +15,7 @@ describe('StarRating', () => {
       render(<StarRating value={3} />)
       expect(screen.getByRole('group')).toHaveAttribute(
         'aria-label',
-        'Rating: 3 out of 5 stars'
+        'Rating: 3.0 out of 5 stars'
       )
     })
 
@@ -156,7 +156,7 @@ describe('StarRating', () => {
       render(<StarRating value={4} />)
 
       const group = screen.getByRole('group')
-      expect(group).toHaveAttribute('aria-label', 'Rating: 4 out of 5 stars')
+      expect(group).toHaveAttribute('aria-label', 'Rating: 4.0 out of 5 stars')
     })
   })
 

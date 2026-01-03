@@ -434,3 +434,380 @@ To complete OAuth setup:
 - "Try again" button to reset error state
 
 **Test Count**: 50 (unchanged)
+
+---
+
+## [2026-01-01] Complete UX Overhaul
+
+### Feature: Intentional Minimalism with Micro-Interactions
+
+**What**: Comprehensive UX redesign transforming the app from "functional minimal" to "intentional minimal" with purposeful animations, better discovery, and SEO optimization.
+
+**Design Philosophy**: "Notion's clarity meets Letterboxd's soul, built by someone who'd rather be writing SQL."
+
+**Key Improvements**:
+- Micro-interactions using Framer Motion
+- Page transitions with fade + slide effects
+- SEO optimization with React 19 native meta tags
+- Public shareable profiles at `/@username`
+- Community stats (avg rating, count) on items
+- Live preview carousel on homepage
+- Filter pills for topic browsing
+
+**Files Created**:
+- `frontend/src/lib/animations.ts` - Animation presets (page transitions, stagger, star pulse)
+- `frontend/src/components/SEO.tsx` - SEO meta tags + structured data (JSON-LD)
+- `frontend/src/components/PageTransition.tsx` - Page transition wrapper components
+- `frontend/src/services/statsService.ts` - Community stats queries (batch, user, popular items)
+- `frontend/src/services/profileService.ts` - Profile queries (by username, update, top rated)
+- `frontend/src/pages/PublicProfilePage.tsx` - SEO-optimized public profile view
+
+**Files Modified**:
+- `frontend/src/App.tsx` - Added /@username route with lazy loading
+- `frontend/src/components/StarRating.tsx` - Framer Motion pulse + glow animations
+- `frontend/src/components/ItemCard.tsx` - Hover lift effect, community stats display, Progress bar
+- `frontend/src/pages/HomePage.tsx` - Live preview carousel, accordion FAQ, new tagline
+- `frontend/src/pages/TopicsPage.tsx` - Stagger animation, hover effects, SEO
+- `frontend/src/pages/TopicDetailPage.tsx` - Filter pills, search feedback, witty taglines, SEO
+- `frontend/src/pages/ProfilePage.tsx` - Stats grid, top rated carousel, tabbed navigation
+
+**New shadcn/ui Components Added**:
+- `tabs.tsx` - Tabbed navigation for profile
+- `dialog.tsx` - Modal dialogs
+- `avatar.tsx` - User avatar with fallback
+- `progress.tsx` - Rating progress bar
+- `scroll-area.tsx` - Horizontal scroll for top rated
+- `accordion.tsx` - FAQ on homepage
+- `dropdown-menu.tsx` - Future use
+
+**Animation Details**:
+- StarRating: Subtle pulse (1.15x scale, 150ms) + glow effect on click
+- ItemCard: Hover lift (-2px translateY) + shadow increase
+- Pages: Fade + slide up (200ms ease-out)
+- Grids: Stagger children (50ms delay each)
+- Stats: Count up animation (1s duration)
+- All animations respect `prefers-reduced-motion`
+
+**SEO Implementation**:
+- React 19 native Document Metadata (no external library needed)
+- Open Graph tags for social sharing
+- Twitter Card support
+- Structured data: WebSite, Person, ItemList schemas
+- Dynamic meta titles per page type
+- Canonical URLs
+
+**Topic Taglines**:
+| Topic | Tagline |
+|-------|---------|
+| Movies | "Every masterpiece. Every guilty pleasure." |
+| Series | "The ones you binged. The ones you pretend you didn't." |
+| Books | "The ones you finished. The ones collecting dust." |
+| Anime | "Your gateway into degeneracy. Own it." |
+| Games | "Hundreds of hours well spent. Arguably." |
+| Restaurants | "The spots you'd actually recommend." |
+
+**Dependencies Added**:
+- `framer-motion` (v12.x) - Animation library
+- `@radix-ui/react-tabs` - Tabs primitive
+- `@radix-ui/react-dialog` - Dialog primitive
+- `@radix-ui/react-avatar` - Avatar primitive
+- `@radix-ui/react-progress` - Progress primitive
+- `@radix-ui/react-scroll-area` - Scroll area primitive
+- `@radix-ui/react-accordion` - Accordion primitive
+- `@radix-ui/react-dropdown-menu` - Dropdown primitive
+
+**Test Count**: 50 (all passing)
+
+**Build Size**: 680KB (increased due to Framer Motion, but code-split for lazy loading)
+
+---
+
+## [2026-01-01] Bug Fixes and Testing Expansion
+
+### Bug Fixes
+
+**What**: Fixed several issues identified during UX overhaul review.
+
+**Files Modified**:
+- `frontend/src/components/StarRating.tsx` - Fixed fractional rating display
+- `frontend/src/pages/TopicDetailPage.tsx` - Fixed duplicate API calls and filter logic
+- `frontend/src/pages/ProfilePage.tsx` - Fixed duplicate API call on activeTab change
+- `frontend/src/components/ItemCard.tsx` - Fixed duplicate rating fetch
+- Multiple `frontend/src/components/ui/*.tsx` files - Fixed deprecated React.ElementRef
+
+**Files Created**:
+- `frontend/src/services/statsService.test.ts` - 10 tests for stats service
+- `frontend/src/services/profileService.test.ts` - 11 tests for profile service
+- `frontend/src/components/SEO.test.tsx` - 13 tests for SEO components
+- `frontend/src/components/PageTransition.test.tsx` - 12 tests for animation wrappers
+
+**Bug Details**:
+
+**1. StarRating Half-Star Display** (`StarRating.tsx:39-48, 179-191`)
+- **Issue**: Fractional ratings (e.g., 4.3) didn't visually show partial star fill
+- **Fix**: Added `getStarFillPercent()` function and CSS clip-path overlay
+- **How**: Uses `clipPath: inset(0 ${100 - fillPercent}% 0 0)` for partial star display
+
+**2. TopicDetailPage Duplicate API Calls** (`TopicDetailPage.tsx:58-59, 68-73`)
+- **Issue**: Search API called multiple times unnecessarily
+- **Fix**: Added `lastFetchedQuery` ref to track and skip duplicate fetches
+- **How**: `if (lastFetchedQuery.current === query) return`
+
+**3. TopicDetailPage Filter Logic** (`TopicDetailPage.tsx:177-182`)
+- **Issue**: Filters showed items without ratings as matching "5★" or "4★+"
+- **Fix**: Added `stats.ratingCount > 0` check to all rating-based filters
+- **How**: `return stats && stats.ratingCount > 0 && stats.avgRating >= 4.8`
+
+**4. ProfilePage Double Fetch** (`ProfilePage.tsx:181`)
+- **Issue**: `activeTab` in dependencies caused refetch when tab was set
+- **Fix**: Removed `activeTab` from useEffect dependencies
+- **How**: Use functional setState: `setActiveTab((prev) => prev || ...)`
+
+**5. ItemCard Duplicate Rating Fetch** (`ItemCard.tsx:46-59`)
+- **Issue**: Each ItemCard fetched user rating on every parent re-render
+- **Fix**: Added `lastFetchedItemId` ref to prevent duplicate fetches
+- **How**: `if (lastFetchedItemId.current === item.id) return`
+
+**6. Deprecated React.ElementRef** (all shadcn ui components)
+- **Issue**: `React.ElementRef` deprecated in favor of `React.ComponentRef`
+- **Fix**: Global replace in all UI components
+- **Files affected**: accordion, avatar, dialog, dropdown-menu, label, progress, scroll-area, separator, tabs, tooltip
+
+**Tests Added**:
+
+| Service/Component | Tests Added | Coverage Focus |
+|-------------------|-------------|----------------|
+| statsService | 10 | getItemStats, getItemStatsBatch, getUserStats, getPopularItems, getRecentlyRatedItems |
+| profileService | 11 | getCurrentProfile, getProfileByUsername, updateProfile, isUsernameAvailable, getTopRatedItems |
+| SEO | 13 | Meta rendering, JSON-LD schemas (WebSite, Profile, ItemList), edge cases |
+| PageTransition | 12 | PageTransition, StaggerContainer, StaggerItem, FadeIn, reduced motion handling |
+
+**Existing Test Fixes**:
+- Updated StarRating tests for new aria-label format (`.toFixed(1)` = "4.0" not "4")
+- Updated ItemCard test for new aria-label format
+
+**Test Count**: 96 (was 50, +46 new tests)
+
+**All tests passing, build succeeds**
+
+---
+
+## [2026-01-01] Major Feature Update: Server-Side Filtering, Pagination, TODO Lists, and Local Migrations
+
+### Infrastructure: Supabase Local Migrations
+
+**What**: Set up local migration folder for version control of database changes.
+
+**Files Created**:
+- `supabase/config.toml` - Supabase project configuration
+- `supabase/migrations/20260101000001_create_user_todo_lists.sql` - TODO list table + RLS
+- `supabase/migrations/20260101000002_add_topic_image_url.sql` - Topic images support
+- `supabase/migrations/20260101000003_create_item_stats_function.sql` - Server-side filtering function
+- `supabase/migrations/20260101000004_create_user_ratings_batch_function.sql` - Batch user ratings
+
+**Database Changes**:
+- New `user_todo_lists` table for per-topic watchlists
+- New `image_url` column on `topics` table
+- New `get_items_with_stats()` PostgreSQL function for server-side filtering
+- New `get_items_with_stats_count()` function for pagination counts
+- New `get_user_ratings_for_items()` function for batch rating fetches
+
+---
+
+### Feature: Server-Side Filtering & Pagination
+
+**Problem**: Filtering by rating and "new" was done client-side, causing:
+- All items fetched even when filtering for specific ratings
+- "New" filter used 7-day threshold (should be 30 days based on metadata)
+- No pagination support
+
+**Solution**: Move all filtering to database via PostgreSQL functions.
+
+**Files Modified**:
+- `frontend/src/services/statsService.ts` - Added `getFilteredItems()` and `getUserRatingsBatch()` methods
+- `frontend/src/pages/TopicDetailPage.tsx` - Complete rewrite for server-side filtering + pagination
+- `frontend/src/types/index.ts` - Added `ItemWithStats`, `UserTodoItem` types, `image_url` to Topic
+
+**Files Created**:
+- `frontend/src/components/Pagination.tsx` - Previous/Next pagination component
+
+**Filter Parameters**:
+| Filter | Server Parameter | Value |
+|--------|------------------|-------|
+| All | None | - |
+| 5★ | `p_min_avg_rating` | 4.8 |
+| 4★+ | `p_min_avg_rating` | 4.0 |
+| New | `p_released_after` | 30 days ago (from metadata.release_date or metadata.year) |
+
+**Pagination**: 24 items per page with Previous/Next controls.
+
+---
+
+### Feature: TODO Lists (Per-Topic Watchlists)
+
+**What**: Users can add items to a "watch later" list without rating them.
+
+**Files Created**:
+- `frontend/src/services/todoService.ts` - CRUD operations for TODO items
+
+**Service Methods**:
+- `getTodosByTopic(topicId)` - Get user's TODO items for a specific topic
+- `getAllTodos()` - Get all TODO items grouped by topic
+- `addToTodo(itemId, topicId)` - Add item to TODO list
+- `removeFromTodo(itemId)` - Remove item from TODO list
+- `getTodoStatusBatch(itemIds)` - Batch check which items are in TODO list
+
+**Database Table**: `user_todo_lists`
+- `id`, `user_id`, `item_id`, `topic_id`, `priority`, `notes`, `created_at`, `updated_at`
+- Unique constraint on (user_id, item_id)
+- RLS policies: Users manage own lists, public profiles' lists visible
+
+---
+
+### Feature: Enhanced ItemCard Component
+
+**What**: Comprehensive ItemCard improvements.
+
+**Files Modified**:
+- `frontend/src/components/ItemCard.tsx`
+- `frontend/src/components/StarRating.tsx` - Added 'xs' size
+
+**Improvements**:
+1. **StarRating for Community Stats**: Replaced Progress bar with fractional StarRating display
+2. **"New" Badge**: Items released in last 30 days (based on metadata.release_date or year) show "New" badge
+3. **Image Fallback Chain**: `item.image_url → metadata.poster_url → metadata.image`
+4. **TODO Button**: Plus button to add unrated items to TODO list
+5. **Enhanced Hover Effects**: `y: -4, scale: 1.02` with subtle shadow
+6. **Pre-fetched User Ratings**: `initialUserRating` prop skips individual API calls
+7. **Optimized API Calls**: Uses `lastFetchedItemId` ref to prevent duplicate fetches
+
+**New Props**:
+- `initialUserRating?: number | null` - Pre-fetched user rating
+- `isInTodo?: boolean` - Whether item is in TODO list
+- `onAddToTodo?: () => void` - Add to TODO callback
+- `onRemoveFromTodo?: () => void` - Remove from TODO callback
+
+---
+
+### Feature: Topic Card Images
+
+**What**: Topic cards support background images with gradient overlay.
+
+**Files Modified**:
+- `frontend/src/pages/TopicsPage.tsx` - Image support with fallback
+- `frontend/src/types/index.ts` - Added `image_url` to Topic interface
+
+**Implementation**:
+- If `topic.image_url` exists: Show image with gradient overlay, icon on bottom-left
+- If no image: Show muted background with centered large icon
+
+---
+
+### Feature: Item Detail Modal
+
+**What**: Clickable items open a detail modal with topic-specific metadata display.
+
+**Files Created**:
+- `frontend/src/components/ItemDetailModal.tsx`
+
+**Features**:
+- Topic-specific metadata fields (movies: director, year, genre, etc.)
+- Full image display
+- User rating input
+- Community rating display
+- TODO list toggle button
+- Source badge (Curated/AI/User)
+
+**Topic Metadata Configurations**:
+| Topic | Fields Displayed |
+|-------|-----------------|
+| Movies | Year, Director, Genre, Runtime, Cast |
+| Series | Year, Seasons, Network, Creator, Genre |
+| Books | Author, Year, Pages, Publisher, Genre |
+| Anime | Year, Episodes, Studio, Genre, Status |
+| Games | Year, Platform, Developer, Publisher, Genre |
+| Restaurants | Location, Cuisine, Price Range, Address |
+
+---
+
+### Bug Fix: API Call Deduplication
+
+**Problem**: React StrictMode caused duplicate API calls in HomePage and TopicsPage.
+
+**Solution**: Added `useRef` guards to prevent duplicate fetches.
+
+**Files Modified**:
+- `frontend/src/pages/HomePage.tsx` - Added `hasFetched` ref
+- `frontend/src/pages/TopicsPage.tsx` - Added `hasFetched` ref
+- `frontend/src/services/profileService.ts` - Added `getCurrentProfileWithRatings()` for consolidated calls
+
+---
+
+### Code Quality
+
+**Test Count**: 96 (all passing)
+
+**Build**: Successful (731KB main bundle, acceptable for full feature set)
+
+**Files Summary**:
+- **New files**: 9 (4 migrations, 4 components/services, 1 config)
+- **Modified files**: 10 (pages, services, types)
+- **Database functions**: 3 new PostgreSQL functions
+
+---
+
+## [2026-01-02] Modal Integration & Final Wiring
+
+### Feature: Item Detail Modal Integration
+
+**What**: Connected the ItemDetailModal to TopicDetailPage, enabling clickable item cards that open a detail modal with full item information, rating controls, and TODO list management.
+
+**Files Modified**:
+- `frontend/src/pages/TopicDetailPage.tsx` - Complete integration with modal and TODO status tracking
+
+**Implementation Details**:
+
+**Modal State Management**:
+- `selectedItem` state tracks which item's modal is open
+- `isModalOpen` state controls modal visibility
+- `todoStatus` Set tracks which items are in user's TODO list
+
+**New Event Handlers**:
+- `handleItemClick(item)` - Opens modal with item details and topic context
+- `handleRatingChange(rating)` - Saves rating with optimistic update, removes from TODO if rated
+- `handleAddToTodo(itemId)` - Adds item to TODO list with optimistic update
+- `handleRemoveFromTodo(itemId)` - Removes item from TODO list
+
+**Data Flow**:
+1. Items fetched with server-side filtering
+2. User ratings + TODO status fetched in parallel for visible items
+3. Clicking item opens modal with pre-fetched data
+4. Rating in modal updates local state + persists to database
+5. TODO actions update local state + persist to database
+6. Optimistic updates with rollback on error
+
+**Toast Messages**:
+| Action | Success | Error |
+|--------|---------|-------|
+| Rate item | "Noted. Your taste is... interesting." | "Couldn't save that. The database is judging you." |
+| Add to TODO | "Added to your list. No pressure to actually watch it." | "Couldn't add to list. Try again?" |
+| Remove from TODO | (silent) | "Couldn't remove from list." |
+
+**Integration with ItemCard**:
+- `onClick` prop triggers `handleItemClick`
+- `isInTodo` prop reflects TODO status
+- `onAddToTodo` / `onRemoveFromTodo` callbacks for TODO buttons
+- Item passed with topic context for modal display
+
+**Props passed to ItemDetailModal**:
+- `item` - Selected item with topic attached
+- `open` / `onOpenChange` - Modal visibility control
+- `avgRating` / `ratingCount` - Community stats
+- `userRating` - Current user's rating
+- `onRatingChange` - Rating callback
+- `isInTodo` - TODO status
+- `onAddToTodo` / `onRemoveFromTodo` - TODO callbacks
+- `isAuthenticated` - Controls what actions are shown
+
+**Build**: Successful (766KB main bundle)
+**Tests**: 96 passing

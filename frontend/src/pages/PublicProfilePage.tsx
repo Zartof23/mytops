@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useParams, Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { useAuthStore } from '../store/authStore'
-import { supabase } from '../lib/supabase'
-import { profileService } from '../services/profileService'
+import { profileService, type ProfileWithRatings } from '../services/profileService'
 import { StarRating } from '../components/StarRating'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,22 +10,10 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { SEO } from '@/components/SEO'
+import { SEO, ProfileSchema } from '@/components/SEO'
 import { PageTransition, StaggerContainer, StaggerItem, FadeIn } from '@/components/PageTransition'
-import { Share2, Star, Calendar } from 'lucide-react'
-import { toast } from 'sonner'
-import type { Item, Topic, Profile } from '../types'
-
-interface RatingWithItem {
-  id: string
-  user_id: string
-  item_id: string
-  rating: number
-  notes: string | null
-  created_at: string
-  updated_at: string
-  item: Item & { topic: Topic }
-}
+import { Star, Calendar, ArrowLeft } from 'lucide-react'
+import type { Item, Topic } from '../types'
 
 interface RatingsByTopic {
   topic: Topic
@@ -57,43 +44,48 @@ function ProfileSkeleton() {
   )
 }
 
-function CountUp({ value, duration = 1 }: { value: number; duration?: number }) {
-  const [count, setCount] = useState(0)
+function PublicProfilePage() {
+  const { username } = useParams<{ username: string }>()
   const prefersReducedMotion = useReducedMotion()
 
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setCount(value)
-      return
+  const [profile, setProfile] = useState<ProfileWithRatings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>('')
+
+  // Group ratings by topic
+  const ratingsByTopic = useMemo(() => {
+    if (!profile?.ratings) return []
+
+    const grouped: Record<string, RatingsByTopic> = {}
+
+    for (const rating of profile.ratings) {
+      const item = rating.item
+      const topic = item?.topic
+
+      if (!topic) continue
+
+      if (!grouped[topic.id]) {
+        grouped[topic.id] = { topic, ratings: [] }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { topic: _, ...itemWithoutTopic } = item
+      grouped[topic.id].ratings.push({
+        id: rating.id,
+        rating: rating.rating,
+        notes: rating.notes,
+        item: itemWithoutTopic
+      })
     }
 
-    let start = 0
-    const end = value
-    const increment = end / (duration * 60) // 60fps
-    const timer = setInterval(() => {
-      start += increment
-      if (start >= end) {
-        setCount(end)
-        clearInterval(timer)
-      } else {
-        setCount(Math.floor(start))
-      }
-    }, 1000 / 60)
+    return Object.values(grouped).sort((a, b) => b.ratings.length - a.ratings.length)
+  }, [profile?.ratings])
 
-    return () => clearInterval(timer)
-  }, [value, duration, prefersReducedMotion])
-
-  return <span>{count}</span>
-}
-
-export function ProfilePage() {
-  const { user } = useAuthStore()
-  const prefersReducedMotion = useReducedMotion()
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [ratingsByTopic, setRatingsByTopic] = useState<RatingsByTopic[]>([])
-  const [topRated, setTopRated] = useState<RatingWithItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<string>('')
+  // Get top rated items
+  const topRated = useMemo(() => {
+    if (!profile?.ratings) return []
+    return profile.ratings.filter((r) => r.rating === 5).slice(0, 10)
+  }, [profile?.ratings])
 
   // Calculate total ratings
   const totalRatings = useMemo(
@@ -110,97 +102,54 @@ export function ProfilePage() {
     })
   }, [profile?.created_at])
 
-  useEffect(() => {
-    if (!user) return
-
-    async function fetchData() {
-      // Fetch profile
-      const { data: profileData } = await profileService.getCurrentProfile()
-      if (profileData) {
-        setProfile(profileData)
-      }
-
-      // Fetch ratings
-      const { data: ratings, error } = await supabase
-        .from('user_ratings')
-        .select(`
-          *,
-          item:items (
-            *,
-            topic:topics (*)
-          )
-        `)
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching ratings:', error)
-        setLoading(false)
-        return
-      }
-
-      const typedRatings = (ratings || []) as RatingWithItem[]
-
-      // Get top rated (5 stars)
-      setTopRated(typedRatings.filter((r) => r.rating === 5).slice(0, 10))
-
-      // Group ratings by topic
-      const grouped: Record<string, RatingsByTopic> = {}
-
-      for (const rating of typedRatings) {
-        const item = rating.item
-        const topic = item?.topic
-
-        if (!topic) continue
-
-        if (!grouped[topic.id]) {
-          grouped[topic.id] = { topic, ratings: [] }
-        }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { topic: _, ...itemWithoutTopic } = item
-        grouped[topic.id].ratings.push({
-          id: rating.id,
-          rating: rating.rating,
-          notes: rating.notes,
-          item: itemWithoutTopic
-        })
-      }
-
-      const groupedArray = Object.values(grouped).sort(
-        (a, b) => b.ratings.length - a.ratings.length
-      )
-      setRatingsByTopic(groupedArray)
-
-      // Set first topic as active tab (only if not already set)
-      setActiveTab((prev) => prev || (groupedArray.length > 0 ? groupedArray[0].topic.id : ''))
-
-      setLoading(false)
-    }
-
-    fetchData()
-  }, [user]) // Removed activeTab - it was causing double fetch
-
-  const handleShare = async () => {
-    if (!profile?.username) {
-      toast.error("Set a username first to share your profile.")
-      return
-    }
-
-    const url = `${window.location.origin}/@${profile.username}`
-    await navigator.clipboard.writeText(url)
-    toast.success("Profile link copied!")
-  }
-
   // Get user initials for avatar
   const initials = useMemo(() => {
     if (profile?.display_name) {
       return profile.display_name.slice(0, 2).toUpperCase()
     }
-    if (user?.email) {
-      return user.email.slice(0, 2).toUpperCase()
+    if (profile?.username) {
+      return profile.username.slice(0, 2).toUpperCase()
     }
     return '?'
-  }, [profile?.display_name, user?.email])
+  }, [profile?.display_name, profile?.username])
+
+  useEffect(() => {
+    async function fetchProfile() {
+      if (!username) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+
+      const { data, error } = await profileService.getProfileByUsername(username)
+
+      if (error || !data) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+
+      setProfile(data)
+
+      // Set first topic as active tab after data loads
+      const ratings = data.ratings || []
+      const grouped: Record<string, Topic> = {}
+      for (const r of ratings) {
+        const topic = r.item?.topic
+        if (topic && !grouped[topic.id]) {
+          grouped[topic.id] = topic
+        }
+      }
+      const topicIds = Object.keys(grouped)
+      if (topicIds.length > 0) {
+        setActiveTab(topicIds[0])
+      }
+
+      setLoading(false)
+    }
+
+    fetchProfile()
+  }, [username])
 
   if (loading) {
     return (
@@ -210,13 +159,47 @@ export function ProfilePage() {
     )
   }
 
+  if (notFound || !profile) {
+    return (
+      <PageTransition>
+        <SEO
+          title="Profile Not Found"
+          description="This profile doesn't exist or is private."
+          noindex
+        />
+        <div className="max-w-4xl mx-auto">
+          <Card className="p-8 text-center">
+            <p className="text-destructive mb-2 font-medium">Profile not found</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              This profile doesn't exist or is set to private.
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Go home
+              </Link>
+            </Button>
+          </Card>
+        </div>
+      </PageTransition>
+    )
+  }
+
+  const displayName = profile.display_name || profile.username || 'Anonymous'
+
   return (
     <PageTransition>
       <SEO
-        title="Your Profile"
-        description="Your personal collection of favorites across movies, books, games, and more."
-        url="/profile"
-        noindex // Private profile shouldn't be indexed
+        title={`@${profile.username}'s Favorites`}
+        description={profile.bio || `${displayName}'s curated collection of favorites across movies, books, games, and more.`}
+        url={`/@${profile.username}`}
+        type="profile"
+      />
+      <ProfileSchema
+        username={profile.username || ''}
+        displayName={profile.display_name || undefined}
+        bio={profile.bio || undefined}
+        url={`/@${profile.username}`}
       />
 
       <div className="max-w-4xl mx-auto">
@@ -231,13 +214,9 @@ export function ProfilePage() {
             <AvatarFallback className="text-lg">{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold truncate">
-              {profile?.display_name || user?.email?.split('@')[0] || 'Anonymous'}
-            </h1>
-            {profile?.username && (
-              <p className="text-sm text-muted-foreground">@{profile.username}</p>
-            )}
-            {profile?.bio && (
+            <h1 className="text-xl font-bold truncate">{displayName}</h1>
+            <p className="text-sm text-muted-foreground">@{profile.username}</p>
+            {profile.bio && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                 {profile.bio}
               </p>
@@ -253,10 +232,6 @@ export function ProfilePage() {
               </span>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleShare}>
-            <Share2 className="h-4 w-4 mr-1" />
-            Share
-          </Button>
         </motion.div>
 
         {/* Stats Grid */}
@@ -267,9 +242,7 @@ export function ProfilePage() {
                 {ratingsByTopic.slice(0, 6).map(({ topic, ratings }) => (
                   <div key={topic.id}>
                     <span className="text-xl">{topic.icon}</span>
-                    <p className="text-lg font-bold">
-                      <CountUp value={ratings.length} />
-                    </p>
+                    <p className="text-lg font-bold">{ratings.length}</p>
                     <p className="text-xs text-muted-foreground">{topic.name}</p>
                   </div>
                 ))}
@@ -323,10 +296,10 @@ export function ProfilePage() {
         {ratingsByTopic.length === 0 ? (
           <Card className="p-8 text-center">
             <p className="text-muted-foreground mb-2">
-              You haven't rated anything yet.
+              No public ratings yet.
             </p>
             <p className="text-xs text-muted-foreground italic">
-              Go find something you love and give it some stars.
+              Check back later for updates.
             </p>
           </Card>
         ) : (
@@ -378,3 +351,5 @@ export function ProfilePage() {
     </PageTransition>
   )
 }
+
+export default PublicProfilePage

@@ -1,61 +1,250 @@
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { Star } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { statsService, type PopularItem } from '../services/statsService'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
+import { Skeleton } from '@/components/ui/skeleton'
+import { SEO, WebSiteSchema } from '@/components/SEO'
+import { PageTransition } from '@/components/PageTransition'
 
 export function HomePage() {
   const { user } = useAuthStore()
+  const [popularItems, setPopularItems] = useState<PopularItem[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const prefersReducedMotion = useReducedMotion()
+
+  // Prevent duplicate fetch on React StrictMode
+  const hasFetched = useRef(false)
+
+  // Fetch popular items for the preview
+  useEffect(() => {
+    if (hasFetched.current) return
+    hasFetched.current = true
+
+    async function fetchPopular() {
+      const { data } = await statsService.getPopularItems(6)
+      if (data && data.length > 0) {
+        setPopularItems(data)
+      }
+      setIsLoading(false)
+    }
+    fetchPopular()
+  }, [])
+
+  // Auto-rotate carousel
+  useEffect(() => {
+    if (popularItems.length === 0 || prefersReducedMotion) return
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % popularItems.length)
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [popularItems.length, prefersReducedMotion])
+
+  const currentItem = popularItems[currentIndex]
 
   return (
-    <div className="max-w-xl mx-auto py-12">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-2">mytops</h1>
-        <p className="text-muted-foreground">
-          Track your favorite things. Share them with the world.
-        </p>
-      </div>
+    <PageTransition>
+      <SEO
+        title="mytops - Track Your Favorite Movies, Books, Games & More"
+        description="Create your personal collection of favorites. Rate movies, books, anime, games, and restaurants. Share your taste with the world. No algorithms, no tracking—just your favorites, beautifully organized."
+        url="/"
+      />
+      <WebSiteSchema />
 
-      <Card className="mb-8">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">How it works</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <div className="flex gap-3">
-            <span className="text-foreground font-mono">1.</span>
-            <span>Browse topics (movies, books, games, etc.)</span>
-          </div>
-          <div className="flex gap-3">
-            <span className="text-foreground font-mono">2.</span>
-            <span>Search for anything — if it doesn't exist, AI creates it</span>
-          </div>
-          <div className="flex gap-3">
-            <span className="text-foreground font-mono">3.</span>
-            <span>Rate it 1-5 stars to add it to your collection</span>
-          </div>
-          <div className="flex gap-3">
-            <span className="text-foreground font-mono">4.</span>
-            <span>Your profile shows all your favorites</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="max-w-xl mx-auto py-12 px-4">
+        {/* Hero Section */}
+        <div className="text-center mb-10">
+          <motion.h1
+            className="text-4xl font-bold tracking-tight mb-3"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            mytops
+          </motion.h1>
+          <motion.p
+            className="text-lg text-muted-foreground"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            Your taste, organized. No algorithms deciding for you.
+          </motion.p>
+        </div>
 
-      <div className="flex gap-3 justify-center">
-        <Button asChild>
-          <Link to="/topics">Browse Topics</Link>
-        </Button>
-        {!user && (
-          <Button variant="outline" asChild>
-            <Link to="/register">Create Account</Link>
+        {/* Live Preview Carousel */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <Card className="mb-8 overflow-hidden">
+            <CardContent className="p-6">
+              <p className="text-xs text-muted-foreground mb-4 text-center">
+                What people are rating
+              </p>
+
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-3/4 mx-auto" />
+                  <Skeleton className="h-4 w-1/2 mx-auto" />
+                </div>
+              ) : popularItems.length > 0 ? (
+                <div className="h-20 flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentItem?.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-center"
+                    >
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <span className="text-xl">
+                          {currentItem?.topic?.icon || '📦'}
+                        </span>
+                        <span className="font-semibold">
+                          {currentItem?.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`w-4 h-4 ${
+                              star <= Math.round(currentItem?.avgRating || 0)
+                                ? 'fill-foreground text-foreground'
+                                : 'fill-transparent text-muted-foreground/30'
+                            }`}
+                          />
+                        ))}
+                        <span className="text-sm text-muted-foreground ml-2">
+                          {currentItem?.avgRating?.toFixed(1)}
+                        </span>
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground text-sm py-4">
+                  Be the first to rate something!
+                </p>
+              )}
+
+              {/* Carousel dots */}
+              {popularItems.length > 1 && (
+                <div className="flex justify-center gap-1.5 mt-4">
+                  {popularItems.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                        idx === currentIndex
+                          ? 'bg-foreground'
+                          : 'bg-muted-foreground/30'
+                      }`}
+                      aria-label={`Go to item ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* CTA Buttons */}
+        <motion.div
+          className="flex gap-3 justify-center mb-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.3 }}
+        >
+          <Button asChild size="lg">
+            <Link to="/topics">Start Curating</Link>
           </Button>
-        )}
+          {!user && (
+            <Button variant="outline" size="lg" asChild>
+              <Link to="/register">Create Account</Link>
+            </Button>
+          )}
+        </motion.div>
+
+        {/* FAQ Accordion */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="what">
+              <AccordionTrigger className="text-sm">
+                What is this?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground">
+                You search. You rate. We remember. If something doesn't exist in our
+                database, AI creates it. No tracking, no recommendations you didn't
+                ask for. Just your favorites, beautifully organized.
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="topics">
+              <AccordionTrigger className="text-sm">
+                What can I track?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground">
+                Movies, TV series, books, anime, games, and restaurants. More topics
+                coming based on what people actually want to track. (Yes, I'm taking
+                requests.)
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="privacy">
+              <AccordionTrigger className="text-sm">
+                Is my data private?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground">
+                Your ratings are private by default. You can choose to make your
+                profile public if you want to share your impeccable taste with the
+                world. I don't sell your data. I barely know SQL.
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="why">
+              <AccordionTrigger className="text-sm">
+                Why does this exist?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground">
+                I wanted to track my favorite anime and couldn't find anything
+                simple enough. So I built this. Yes, I'm a backend dev. Yes, this
+                frontend was painful. You're welcome.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </motion.div>
+
+        {/* Footer Quote */}
+        <motion.p
+          className="text-center text-xs text-muted-foreground italic mt-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.5 }}
+        >
+          "Built by a backend dev who doesn't usually do frontend."
+        </motion.p>
       </div>
-
-      <Separator className="my-8" />
-
-      <p className="text-center text-xs text-muted-foreground italic">
-        "I built this because I wanted to track my favorite anime and couldn't find anything simple enough."
-      </p>
-    </div>
+    </PageTransition>
   )
 }

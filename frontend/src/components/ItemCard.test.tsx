@@ -153,7 +153,7 @@ describe('ItemCard', () => {
 
       await waitFor(() => {
         const ratingGroup = screen.getByRole('group')
-        expect(ratingGroup).toHaveAttribute('aria-label', 'Rating: 4 out of 5 stars')
+        expect(ratingGroup).toHaveAttribute('aria-label', 'Rating: 4.0 out of 5 stars')
       })
     })
 

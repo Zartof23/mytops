@@ -4,11 +4,13 @@ import { ThemeToggle } from './ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 export function Layout() {
   const { user, signOut } = useAuthStore()
 
   return (
+    <TooltipProvider>
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b">
@@ -67,5 +69,6 @@ export function Layout() {
       {/* Toast notifications */}
       <Toaster position="bottom-right" />
     </div>
+    </TooltipProvider>
   )
 }

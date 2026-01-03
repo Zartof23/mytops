@@ -1,0 +1,45 @@
+# Supabase Configuration
+# For full configuration options, see: https://supabase.com/docs/guides/cli/config
+
+[project]
+id = "ocasihbuejfjirsrnxzq"
+name = "mytops"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "https://mytops.io"
+
+[auth.external.google]
+enabled = true
+
+[auth.external.github]
+enabled = true
+
+[analytics]
+enabled = false

@@ -4,6 +4,7 @@ export interface Topic {
   slug: string
   description: string | null
   icon: string | null
+  image_url: string | null
   schema_template: Record<string, unknown> | null
   created_at: string
   updated_at: string
@@ -45,4 +46,26 @@ export interface Profile {
   is_public: boolean
   created_at: string
   updated_at: string
+}
+
+// Extended item type with computed stats from database function
+export interface ItemWithStats extends Item {
+  avg_rating: number
+  rating_count: number
+  user_rating?: number | null
+}
+
+// TODO list item for per-topic watchlists
+export interface UserTodoItem {
+  id: string
+  user_id: string
+  item_id: string
+  topic_id: string
+  priority: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  // Joined data
+  item?: Item & { topic?: Topic }
+  topic?: Topic
 }

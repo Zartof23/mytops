@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import { Layout } from './components/Layout'
@@ -10,6 +10,9 @@ import { TopicsPage } from './pages/TopicsPage'
 import { TopicDetailPage } from './pages/TopicDetailPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { AuthCallback } from './pages/AuthCallback'
+
+// Lazy load public profile page for code splitting
+const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage'))
 
 function App() {
   const { initialize, cleanup, initialized } = useAuthStore()
@@ -34,6 +37,16 @@ function App() {
         <Route index element={<HomePage />} />
         <Route path="topics" element={<TopicsPage />} />
         <Route path="topics/:slug" element={<TopicDetailPage />} />
+
+        {/* Public profile route - /@username style */}
+        <Route
+          path="@:username"
+          element={
+            <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading profile...</p></div>}>
+              <PublicProfilePage />
+            </Suspense>
+          }
+        />
 
         {/* Auth routes - redirect to home if already logged in */}
         <Route element={<PublicOnlyRoute />}>
