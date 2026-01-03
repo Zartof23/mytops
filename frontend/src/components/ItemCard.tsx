@@ -107,6 +107,13 @@ export function ItemCard({
   const imageUrl = getImageUrl(item)
   const isNew = isNewRelease(item)
 
+  // Sync state with prop when initialUserRating changes (e.g., async batch load)
+  useEffect(() => {
+    if (initialUserRating !== undefined) {
+      setUserRating(initialUserRating)
+    }
+  }, [initialUserRating])
+
   // Fetch user's existing rating on mount (skip if initialUserRating was provided)
   useEffect(() => {
     // Skip if initialUserRating was explicitly provided (even if null)

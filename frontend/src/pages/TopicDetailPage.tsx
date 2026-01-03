@@ -91,6 +91,7 @@ export function TopicDetailPage() {
   // Track last fetched params to prevent duplicate calls
   const lastFetchParams = useRef<string | null>(null)
   const hasFetchedTopic = useRef(false)
+  const currentSlug = useRef<string | null>(null)
 
   // Debounce search query - waits 300ms after user stops typing
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 300)
@@ -140,7 +141,7 @@ export function TopicDetailPage() {
     if (user && data?.items && data.items.length > 0) {
       const itemIds = data.items.map(i => i.id)
       const [ratingsResult, todoResult] = await Promise.all([
-        statsService.getUserRatingsBatch(itemIds),
+        statsService.getUserRatingsBatch(itemIds, user.id),
         todoService.getTodoStatusBatch(itemIds)
       ])
       if (ratingsResult.data) {
@@ -163,9 +164,10 @@ export function TopicDetailPage() {
         return
       }
 
-      // Prevent duplicate fetch on StrictMode
-      if (hasFetchedTopic.current) return
+      // Prevent duplicate fetch on StrictMode or when only fetchItems ref changed
+      if (hasFetchedTopic.current && currentSlug.current === slug) return
       hasFetchedTopic.current = true
+      currentSlug.current = slug
 
       const { data, error: topicError } = await supabase
         .from('topics')
@@ -185,18 +187,20 @@ export function TopicDetailPage() {
       setLoading(false)
     }
 
-    // Reset state when slug changes
-    lastFetchParams.current = null
-    hasFetchedTopic.current = false
-    setSearchQuery('')
-    setActiveFilter('all')
-    setCurrentPage(1)
-    setItems([])
-    setUserRatings(new Map())
-    setTodoStatus(new Set())
-    setTotalCount(0)
-    setSelectedItem(null)
-    setIsModalOpen(false)
+    // Only reset state when slug actually changes
+    if (currentSlug.current !== slug) {
+      lastFetchParams.current = null
+      hasFetchedTopic.current = false
+      setSearchQuery('')
+      setActiveFilter('all')
+      setCurrentPage(1)
+      setItems([])
+      setUserRatings(new Map())
+      setTodoStatus(new Set())
+      setTotalCount(0)
+      setSelectedItem(null)
+      setIsModalOpen(false)
+    }
 
     fetchTopic()
   }, [slug, fetchItems])
@@ -429,7 +433,10 @@ export function TopicDetailPage() {
         {/* Items Grid or Empty State */}
         {items.length > 0 ? (
           <>
-            <StaggerContainer className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <StaggerContainer
+              key={`${debouncedSearchQuery}-${activeFilter}-${currentPage}`}
+              className="grid grid-cols-2 md:grid-cols-3 gap-4"
+            >
               {items.map((item) => (
                 <StaggerItem key={item.id}>
                   <ItemCard

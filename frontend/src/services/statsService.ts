@@ -340,8 +340,10 @@ export const statsService = {
   /**
    * Batch fetch user ratings for multiple items
    * Uses database function for efficiency
+   * @param itemIds - Array of item IDs to fetch ratings for
+   * @param userId - User ID to fetch ratings for (pass from auth store to avoid extra API call)
    */
-  async getUserRatingsBatch(itemIds: string[]): Promise<{
+  async getUserRatingsBatch(itemIds: string[], userId?: string): Promise<{
     data: Map<string, number> | null
     error: Error | null
   }> {
@@ -350,13 +352,18 @@ export const statsService = {
         return { data: new Map(), error: null }
       }
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        return { data: new Map(), error: null }
+      // Use provided userId or fall back to fetching (for backwards compatibility)
+      let resolvedUserId = userId
+      if (!resolvedUserId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          return { data: new Map(), error: null }
+        }
+        resolvedUserId = user.id
       }
 
       const { data, error } = await supabase.rpc('get_user_ratings_for_items', {
-        p_user_id: user.id,
+        p_user_id: resolvedUserId,
         p_item_ids: itemIds
       })
 

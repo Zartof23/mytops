@@ -811,3 +811,45 @@ To complete OAuth setup:
 
 **Build**: Successful (766KB main bundle)
 **Tests**: 96 passing
+
+---
+
+## [2026-01-03] TopicDetailPage Performance & UI Fixes
+
+### Bug Fixes: API Call Deduplication and UI Issues
+
+**What**: Fixed multiple performance and UI issues on the `/topics/:slug` page.
+
+**Files Modified**:
+- `frontend/src/pages/TopicDetailPage.tsx` - Fixed duplicate API calls and invisible items
+- `frontend/src/services/statsService.ts` - Added userId parameter to avoid redundant getUser() calls
+- `frontend/src/components/ItemCard.tsx` - Fixed user rating not syncing with prop changes
+
+**Bug Details**:
+
+**1. Duplicate /topics API Calls** (`TopicDetailPage.tsx:91-206`)
+- **Issue**: Topic was fetched multiple times when `fetchItems` callback changed (due to `user` dependency in useCallback)
+- **Root Cause**: `hasFetchedTopic.current` was reset every time the effect ran, including when only `fetchItems` changed
+- **Fix**: Added `currentSlug` ref to track actual slug changes; only reset state when slug changes, not when fetchItems ref changes
+- **How**: `if (hasFetchedTopic.current && currentSlug.current === slug) return`
+
+**2. Duplicate /user API Calls** (`statsService.ts:340-368`)
+- **Issue**: `getUserRatingsBatch()` called `supabase.auth.getUser()` internally, even though caller already had user from auth store
+- **Root Cause**: Service method fetched user internally instead of accepting it as parameter
+- **Fix**: Added optional `userId` parameter to `getUserRatingsBatch()`; falls back to fetching for backwards compatibility
+- **How**: Pass `user.id` from TopicDetailPage: `statsService.getUserRatingsBatch(itemIds, user.id)`
+
+**3. User Rating Not Displaying** (`ItemCard.tsx:110-115`)
+- **Issue**: User ratings didn't appear after async batch load completed
+- **Root Cause**: `useState` only uses initial value on mount; when `initialUserRating` prop updated asynchronously, component state didn't sync
+- **Fix**: Added `useEffect` to sync state with prop when `initialUserRating` changes
+- **How**: `useEffect(() => { if (initialUserRating !== undefined) setUserRating(initialUserRating) }, [initialUserRating])`
+
+**4. Items Invisible (opacity=0) Between Searches** (`TopicDetailPage.tsx:436-439`)
+- **Issue**: After search/filter changes, items were in DOM (clickable) but invisible with opacity=0
+- **Root Cause**: `StaggerContainer` animation state was "animate" from previous render; new `StaggerItem` children with `initial: opacity 0` weren't triggering animation to `animate: opacity 1`
+- **Fix**: Added `key` prop to `StaggerContainer` based on search parameters, forcing remount and fresh animation
+- **How**: `<StaggerContainer key={\`${debouncedSearchQuery}-${activeFilter}-${currentPage}\`}>`
+
+**Tests**: 96 passing (no changes)
+**Build**: Successful (767KB main bundle)
