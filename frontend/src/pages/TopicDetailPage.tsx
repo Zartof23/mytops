@@ -136,6 +136,10 @@ export function TopicDetailPage() {
     userId: string | null
   ): Promise<void> => {
     setSearching(true)
+    // Set loadingUserData BEFORE fetching to prevent skeleton flash
+    if (userId) {
+      setLoadingUserData(true)
+    }
 
     try {
       const filterParams = getFilterParams(filter)
@@ -151,6 +155,7 @@ export function TopicDetailPage() {
 
       if (fetchError) {
         console.error('Error fetching items:', fetchError)
+        setLoadingUserData(false)
         return
       }
 
@@ -159,7 +164,6 @@ export function TopicDetailPage() {
 
       // Fetch user ratings and TODO status in parallel if logged in
       if (userId && data?.items && data.items.length > 0) {
-        setLoadingUserData(true)
         const itemIds = data.items.map(i => i.id)
         const [ratingsResult, todoResult] = await Promise.all([
           statsService.getUserRatingsBatch(itemIds, userId),
@@ -172,8 +176,11 @@ export function TopicDetailPage() {
         if (todoResult.data) {
           setTodoStatus(todoResult.data)
         }
-        setLoadingUserData(false)
       }
+      setLoadingUserData(false)
+    } catch (err) {
+      console.error('Unexpected error in fetchItems:', err)
+      setLoadingUserData(false)
     } finally {
       setSearching(false)
     }
@@ -220,8 +227,6 @@ export function TopicDetailPage() {
         }
 
         setTopic(data)
-        // Initial fetch with no filters
-        await fetchItems(data.id, '', 'all', 1, user?.id || null)
         setLoading(false)
       } catch (err) {
         if (!abortController.signal.aborted) {
@@ -238,23 +243,23 @@ export function TopicDetailPage() {
       abortController.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, user?.id])
+  }, [slug])
 
   // Reset to page 1 when filter or search changes
   useEffect(() => {
-    if (!loading && topic) {
+    if (topic) {
       setCurrentPage(1)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchQuery, activeFilter])
 
-  // Fetch items when search/filter/page changes (but not on initial mount)
+  // Fetch items when search/filter/page changes or when topic loads
   useEffect(() => {
-    if (!topic || loading) return
+    if (!topic) return
 
     fetchItems(topic.id, debouncedSearchQuery, activeFilter, currentPage, user?.id || null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchQuery, activeFilter, currentPage, topic, loading, user?.id])
+  }, [debouncedSearchQuery, activeFilter, currentPage, topic, user?.id])
 
   // Memoize event handlers to prevent unnecessary re-renders
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
