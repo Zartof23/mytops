@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Outlet, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { ThemeToggle } from './ThemeToggle'
@@ -6,8 +7,21 @@ import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+/**
+ * Main application layout with header, navigation, and footer.
+ *
+ * Features:
+ * - Skip to main content link for accessibility
+ * - Responsive navigation
+ * - Theme toggle
+ * - Toast notifications
+ */
 export function Layout() {
   const { user, signOut } = useAuthStore()
+
+  const handleSignOut = useCallback(async () => {
+    await signOut()
+  }, [signOut])
 
   return (
     <TooltipProvider>
@@ -40,7 +54,7 @@ export function Layout() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                 >
                   Sign out
                 </Button>

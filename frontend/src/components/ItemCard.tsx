@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import type { Item, Topic } from '../types'
 import { StarRating } from './StarRating'
@@ -16,6 +16,8 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Plus, Check } from 'lucide-react'
+
+const NEW_RELEASE_DAYS = 30
 
 interface ItemCardProps {
   item: Item & { topic?: Topic }
@@ -38,47 +40,80 @@ interface ItemCardProps {
   onRemoveFromTodo?: () => void
 }
 
-const sourceBadges = {
+const SOURCE_BADGES = {
   seed: { label: 'Curated', variant: 'secondary' as const },
   ai_generated: { label: 'AI', variant: 'outline' as const },
   user_submitted: { label: 'User', variant: 'default' as const }
 } as const
 
 /**
- * Check if item is a "new" release (within last 30 days or current year)
+ * Check if item is a "new" release (within last 30 days or current year).
  */
 function isNewRelease(item: Item): boolean {
-  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const thirtyDaysAgo = Date.now() - NEW_RELEASE_DAYS * 24 * 60 * 60 * 1000
   const currentYear = new Date().getFullYear()
 
   // Check metadata for release_date
   if (item.metadata?.release_date) {
-    const releaseDate = new Date(item.metadata.release_date as string)
-    return releaseDate.getTime() > thirtyDaysAgo
+    const releaseDateValue = item.metadata.release_date
+    if (typeof releaseDateValue === 'string') {
+      const releaseDate = new Date(releaseDateValue)
+      return releaseDate.getTime() > thirtyDaysAgo
+    }
   }
 
   // Check metadata for year (consider current year as "new")
   if (item.metadata?.year) {
-    const year = item.metadata.year as number
-    return year >= currentYear
+    const yearValue = item.metadata.year
+    if (typeof yearValue === 'number') {
+      return yearValue >= currentYear
+    }
   }
 
   return false
 }
 
 /**
- * Get image URL with fallback chain: image_url -> metadata.poster_url -> metadata.image
+ * Get image URL with fallback chain: image_url -> metadata.poster_url -> metadata.image.
  */
 function getImageUrl(item: Item): string | null {
-  return (
-    item.image_url ||
-    (item.metadata?.poster_url as string) ||
-    (item.metadata?.image as string) ||
-    null
-  )
+  if (item.image_url) return item.image_url
+
+  if (item.metadata?.poster_url && typeof item.metadata.poster_url === 'string') {
+    return item.metadata.poster_url
+  }
+
+  if (item.metadata?.image && typeof item.metadata.image === 'string') {
+    return item.metadata.image
+  }
+
+  return null
 }
 
-export function ItemCard({
+/**
+ * Item card component displaying item details with rating capability.
+ *
+ * Features:
+ * - Displays item image, name, description, and metadata badges
+ * - Interactive star rating with optimistic updates
+ * - TODO list integration for watch-later functionality
+ * - Community rating statistics
+ * - Accessible keyboard navigation
+ * - Reduced motion support
+ * - Memoized for performance in large lists
+ *
+ * @example
+ * <ItemCard
+ *   item={item}
+ *   onClick={handleItemClick}
+ *   avgRating={4.5}
+ *   ratingCount={120}
+ *   initialUserRating={5}
+ *   isInTodo={false}
+ *   onAddToTodo={handleAddToTodo}
+ * />
+ */
+const ItemCardComponent = ({
   item,
   onClick,
   showRating = true,
@@ -89,23 +124,30 @@ export function ItemCard({
   isInTodo = false,
   onAddToTodo,
   onRemoveFromTodo
-}: ItemCardProps) {
+}: ItemCardProps) => {
   const { user } = useAuthStore()
-  // Use initialUserRating if provided, otherwise null
   const [userRating, setUserRating] = useState<number | null>(
     initialUserRating !== undefined ? initialUserRating : null
   )
   const [isLoading, setIsLoading] = useState(false)
   const prefersReducedMotion = useReducedMotion()
-
-  // Track last fetched item to prevent duplicate API calls
   const lastFetchedItemId = useRef<string | null>(null)
 
-  const badge = item.source ? sourceBadges[item.source] : null
-  const showCommunityStats = avgRating !== undefined && ratingCount !== undefined && ratingCount > 0
-  const shouldAnimate = !prefersReducedMotion && !disableHoverAnimation
-  const imageUrl = getImageUrl(item)
-  const isNew = isNewRelease(item)
+  // Memoize computed values
+  const badge = useMemo(
+    () => (item.source ? SOURCE_BADGES[item.source] : null),
+    [item.source]
+  )
+  const showCommunityStats = useMemo(
+    () => avgRating !== undefined && ratingCount !== undefined && ratingCount > 0,
+    [avgRating, ratingCount]
+  )
+  const shouldAnimate = useMemo(
+    () => !prefersReducedMotion && !disableHoverAnimation,
+    [prefersReducedMotion, disableHoverAnimation]
+  )
+  const imageUrl = useMemo(() => getImageUrl(item), [item])
+  const isNew = useMemo(() => isNewRelease(item), [item])
 
   // Sync state with prop when initialUserRating changes (e.g., async batch load)
   useEffect(() => {
@@ -134,7 +176,7 @@ export function ItemCard({
     fetchRating()
   }, [user, item.id, showRating, initialUserRating])
 
-  const handleRatingChange = async (rating: number) => {
+  const handleRatingChange = useCallback(async (rating: number) => {
     if (!user) return
 
     setIsLoading(true)
@@ -157,29 +199,27 @@ export function ItemCard({
     }
 
     setIsLoading(false)
-  }
+  }, [user, userRating, item.id])
 
-  // Handle card click
-  const handleCardClick = () => {
+  const handleCardClick = useCallback(() => {
     onClick?.()
-  }
+  }, [onClick])
 
-  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+  const handleCardKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onClick?.()
     }
-  }
+  }, [onClick])
 
-  // Handle TODO list actions
-  const handleTodoClick = (e: React.MouseEvent) => {
+  const handleTodoClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     if (isInTodo) {
       onRemoveFromTodo?.()
     } else {
       onAddToTodo?.()
     }
-  }
+  }, [isInTodo, onRemoveFromTodo, onAddToTodo])
 
   const cardContent = (
     <div className="relative">
@@ -330,3 +370,23 @@ export function ItemCard({
     </Card>
   )
 }
+
+/**
+ * Memoized ItemCard for optimal performance in lists.
+ * Only re-renders when props actually change.
+ */
+export const ItemCard = memo(ItemCardComponent, (prevProps, nextProps) => {
+  // Custom comparison function for better performance
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.avgRating === nextProps.avgRating &&
+    prevProps.ratingCount === nextProps.ratingCount &&
+    prevProps.initialUserRating === nextProps.initialUserRating &&
+    prevProps.isInTodo === nextProps.isInTodo &&
+    prevProps.showRating === nextProps.showRating &&
+    prevProps.disableHoverAnimation === nextProps.disableHoverAnimation &&
+    prevProps.onClick === nextProps.onClick &&
+    prevProps.onAddToTodo === nextProps.onAddToTodo &&
+    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo
+  )
+})

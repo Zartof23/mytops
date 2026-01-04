@@ -1,3 +1,4 @@
+import { memo, useCallback, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,7 @@ interface ItemDetailModalProps {
 }
 
 // Topic-specific metadata field configurations
-const topicMetadataConfig: Record<string, { label: string; key: string }[]> = {
+const topicMetadataConfig: Record<string, Array<{ label: string; key: string }>> = {
   movies: [
     { label: 'Year', key: 'year' },
     { label: 'Director', key: 'director' },
@@ -75,7 +76,43 @@ function formatMetadataValue(value: unknown): string {
   return String(value || '')
 }
 
-export function ItemDetailModal({
+/**
+ * Get image URL with fallback chain.
+ */
+function getImageUrl(item: Item): string | null {
+  if (item.image_url) return item.image_url
+
+  if (item.metadata?.poster_url && typeof item.metadata.poster_url === 'string') {
+    return item.metadata.poster_url
+  }
+
+  if (item.metadata?.image && typeof item.metadata.image === 'string') {
+    return item.metadata.image
+  }
+
+  return null
+}
+
+/**
+ * Item detail modal displaying full item information.
+ *
+ * Features:
+ * - Displays item details with topic-specific metadata
+ * - Interactive rating system
+ * - TODO list integration
+ * - Responsive design
+ * - Memoized for performance
+ *
+ * @example
+ * <ItemDetailModal
+ *   item={item}
+ *   open={isOpen}
+ *   onOpenChange={setIsOpen}
+ *   userRating={4}
+ *   onRatingChange={handleRating}
+ * />
+ */
+const ItemDetailModalComponent = ({
   item,
   open,
   onOpenChange,
@@ -87,23 +124,23 @@ export function ItemDetailModal({
   onAddToTodo,
   onRemoveFromTodo,
   isAuthenticated = false
-}: ItemDetailModalProps) {
+}: ItemDetailModalProps) => {
   if (!item) return null
 
   const topicSlug = item.topic?.slug || ''
-  const metadataFields = topicMetadataConfig[topicSlug] || []
-  const imageUrl = item.image_url ||
-    (item.metadata?.poster_url as string) ||
-    (item.metadata?.image as string) ||
-    null
+  const metadataFields = useMemo(
+    () => topicMetadataConfig[topicSlug] || [],
+    [topicSlug]
+  )
+  const imageUrl = useMemo(() => getImageUrl(item), [item])
 
-  const handleTodoClick = () => {
+  const handleTodoClick = useCallback(() => {
     if (isInTodo) {
       onRemoveFromTodo?.()
     } else {
       onAddToTodo?.()
     }
-  }
+  }, [isInTodo, onRemoveFromTodo, onAddToTodo])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -238,3 +275,22 @@ export function ItemDetailModal({
     </Dialog>
   )
 }
+
+/**
+ * Memoized ItemDetailModal - only re-renders when props change.
+ */
+export const ItemDetailModal = memo(ItemDetailModalComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.item?.id === nextProps.item?.id &&
+    prevProps.open === nextProps.open &&
+    prevProps.avgRating === nextProps.avgRating &&
+    prevProps.ratingCount === nextProps.ratingCount &&
+    prevProps.userRating === nextProps.userRating &&
+    prevProps.isInTodo === nextProps.isInTodo &&
+    prevProps.isAuthenticated === nextProps.isAuthenticated &&
+    prevProps.onOpenChange === nextProps.onOpenChange &&
+    prevProps.onRatingChange === nextProps.onRatingChange &&
+    prevProps.onAddToTodo === nextProps.onAddToTodo &&
+    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo
+  )
+})

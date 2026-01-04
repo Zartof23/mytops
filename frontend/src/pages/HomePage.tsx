@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Star, Pause, Play } from 'lucide-react'
@@ -16,6 +16,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SEO, WebSiteSchema } from '@/components/SEO'
 import { PageTransition } from '@/components/PageTransition'
 
+const CAROUSEL_INTERVAL_MS = 4000
+const POPULAR_ITEMS_LIMIT = 6
+
+/**
+ * Home page with popular items carousel and FAQ.
+ *
+ * Features:
+ * - Auto-rotating carousel of popular items
+ * - Pause/play controls
+ * - Respects reduced motion preference
+ * - Accessible ARIA labels
+ */
 export function HomePage() {
   const { user } = useAuthStore()
   const [popularItems, setPopularItems] = useState<PopularItem[]>([])
@@ -24,26 +36,44 @@ export function HomePage() {
   const [isPaused, setIsPaused] = useState(false)
   const prefersReducedMotion = useReducedMotion()
 
-  // Prevent duplicate fetch on React StrictMode
-  const hasFetched = useRef(false)
-
   const togglePause = useCallback(() => {
     setIsPaused((prev) => !prev)
   }, [])
 
+  const currentItem = useMemo(
+    () => popularItems[currentIndex],
+    [popularItems, currentIndex]
+  )
+
   // Fetch popular items for the preview
   useEffect(() => {
-    if (hasFetched.current) return
-    hasFetched.current = true
+    const abortController = new AbortController()
 
     async function fetchPopular() {
-      const { data } = await statsService.getPopularItems(6)
-      if (data && data.length > 0) {
-        setPopularItems(data)
+      try {
+        const { data } = await statsService.getPopularItems(POPULAR_ITEMS_LIMIT)
+
+        if (abortController.signal.aborted) return
+
+        if (data && data.length > 0) {
+          setPopularItems(data)
+        }
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          console.error('Error fetching popular items:', err)
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsLoading(false)
+        }
       }
-      setIsLoading(false)
     }
+
     fetchPopular()
+
+    return () => {
+      abortController.abort()
+    }
   }, [])
 
   // Auto-rotate carousel (respects pause and reduced motion)
@@ -52,12 +82,10 @@ export function HomePage() {
 
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % popularItems.length)
-    }, 4000)
+    }, CAROUSEL_INTERVAL_MS)
 
     return () => clearInterval(interval)
   }, [popularItems.length, prefersReducedMotion, isPaused])
-
-  const currentItem = popularItems[currentIndex]
 
   return (
     <PageTransition>
