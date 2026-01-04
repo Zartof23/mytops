@@ -4,6 +4,139 @@ All notable decisions and changes to this project will be documented in this fil
 
 ---
 
+## [2026-01-04] Add Skeleton Loading for User Data in ItemCard
+
+### Problem
+When ItemCards loaded on topic pages, they initially showed:
+1. **Empty star rating** (no stars filled)
+2. **Add to watch later button** visible immediately
+
+These UI elements depend on API calls that fetch user ratings and TODO status. During the loading period, users saw incomplete/misleading UI instead of loading indicators.
+
+### Root Cause
+- ItemCards received `initialUserRating={null}` on initial render
+- User data (ratings + TODO status) fetched in batch AFTER items loaded
+- No loading state communicated to ItemCard during this gap
+- Result: Empty stars and TODO button appeared before actual data loaded
+
+### Solution Implemented
+1. **Added `isUserDataLoading` prop to ItemCard**:
+   - New optional boolean prop to indicate user data is loading
+   - Defaults to `false` for backwards compatibility
+
+2. **Skeleton loading state in ItemCard** (`ItemCard.tsx:275-279`):
+   ```tsx
+   {user && isUserDataLoading ? (
+     <div className="flex items-center justify-between">
+       <Skeleton className="h-5 w-24" />  {/* Star rating skeleton */}
+       <Skeleton className="h-6 w-6 rounded" />  {/* TODO button skeleton */}
+     </div>
+   ) : (
+     /* Actual rating UI */
+   )}
+   ```
+
+3. **Loading state tracking in TopicDetailPage**:
+   - Added `loadingUserData` state
+   - Set to `true` when fetching user ratings/TODO status
+   - Set to `false` when batch fetch completes
+   - Reset to `false` when topic changes
+   - Passed to all ItemCard instances
+
+### Impact
+- **Better UX**: Clear loading indicators instead of empty UI
+- **No misleading states**: Users don't see empty stars before data loads
+- **Consistent pattern**: Uses same Skeleton component as other loading states
+- **Fast perceived performance**: Skeletons indicate active loading
+
+### Files Changed
+- `frontend/src/components/ItemCard.tsx`:
+  - Added `isUserDataLoading` prop to interface
+  - Imported Skeleton component
+  - Added conditional skeleton rendering for user data
+  - Updated memo comparison to include new prop
+
+- `frontend/src/pages/TopicDetailPage.tsx`:
+  - Added `loadingUserData` state
+  - Set loading state in `fetchItems` before/after user data fetch
+  - Reset loading state in topic change handler
+  - Passed `isUserDataLoading` to all ItemCard instances
+
+### Testing
+- ✅ All tests pass (96 tests)
+- ✅ Build succeeds with no TypeScript errors
+- ✅ Skeleton displays while user data loads, then shows actual rating/TODO UI
+
+---
+
+## [2026-01-04] Fix Topic Filter Rendering Issues
+
+### Problem
+When filtering items on topic pages (e.g., anime → 5★ → All), users experienced:
+1. **Items scattering** - grid positions shifting erratically
+2. **Impagination effects** - items repositioning multiple times before settling
+3. **Invisible but clickable items** - DOM elements present but not visible during animations
+
+### Root Cause Analysis
+1. **StaggerContainer with dynamic key prop** (`TopicDetailPage.tsx:476`):
+   ```tsx
+   <StaggerContainer key={`${debouncedSearchQuery}-${activeFilter}-${currentPage}`}>
+   ```
+   - Caused React to completely unmount/remount the entire grid on filter changes
+   - Destroyed all DOM elements and recreated them from scratch
+   - Triggered full animation sequence replay (stagger delays, fade-in, slide-up)
+
+2. **Stagger animations creating invisible states**:
+   - Items animated from `opacity: 0, y: 12` to `opacity: 1, y: 0` over 0.3s
+   - During animation, items were invisible (`opacity: 0`) but still in DOM (clickable)
+   - Stagger delay (0.05s per item) created sequential "impagination" effect
+
+3. **Multiple useEffect hooks causing redundant fetches**:
+   - One effect reset page to 1 on filter change
+   - Another effect fetched items on filter/page change
+   - Both fired sequentially, causing double renders
+
+### Solution Implemented
+1. **Removed key prop from grid container**:
+   - Let React reuse existing DOM and update children (items already have unique `item.id` keys)
+   - Prevents full grid remount on filter changes
+
+2. **Replaced StaggerContainer with AnimatePresence**:
+   ```tsx
+   <AnimatePresence mode="popLayout">
+     {items.map(item => (
+       <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   ```
+   - `mode="popLayout"` smoothly repositions items without destroying them
+   - `layout` prop animates position changes automatically
+   - Simpler opacity-only transition (0.2s, no stagger delays)
+   - Proper exit animations for removed items
+
+3. **Kept useEffect hooks separate but simplified**:
+   - First effect: Reset page to 1 when filter/search changes (only depends on those)
+   - Second effect: Fetch items when page/filter/search/topic changes
+   - Accepted potential double fetch on filter change (minor trade-off for code clarity)
+
+### Impact
+- **Visual stability**: Items no longer scatter or reposition multiple times
+- **Performance**: Grid reuses DOM instead of recreating on every filter change
+- **Accessibility**: No invisible clickable elements during transitions
+- **Simpler animations**: Faster, cleaner transitions (0.2s vs 0.3s + stagger delays)
+
+### Files Changed
+- `frontend/src/pages/TopicDetailPage.tsx`:
+  - Added `AnimatePresence` import from framer-motion
+  - Removed `StaggerContainer` and `StaggerItem` imports
+  - Replaced grid container with `AnimatePresence` + `motion.div` with `layout` prop
+  - Simplified animation: opacity-only transition with layout animation
+
+### Testing
+- ✅ All tests pass (96 tests)
+- ✅ Build succeeds with no TypeScript errors
+- ✅ Reproduction steps (anime → 5★ → All) should now show smooth transitions
+
+---
+
 ## [2026-01-03] Documentation Restructure
 
 ### Context
@@ -46,7 +179,6 @@ CLAUDE.md had grown to ~4.6k tokens with mixed concerns (core reference, develop
 **Migration for AI Agent**:
 - References updated throughout to point to new file locations
 - All content preserved, just reorganized
-- Original ARCHITECTURE_PLAN.md kept as reference (linked from new ARCHITECTURE.md)
 
 **Impact**:
 - Token usage: Reduced from ~4.6k to ~2.5k in default context

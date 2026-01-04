@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useDebouncedValue } from '../lib/hooks'
 import { statsService } from '../services/statsService'
@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SEO } from '@/components/SEO'
-import { PageTransition, StaggerContainer, StaggerItem } from '@/components/PageTransition'
+import { PageTransition } from '@/components/PageTransition'
 import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Topic, ItemWithStats } from '../types'
@@ -101,6 +101,7 @@ export function TopicDetailPage() {
   const [activeFilter, setActiveFilter] = useState<FilterOption>('all')
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
+  const [loadingUserData, setLoadingUserData] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Modal state
@@ -158,6 +159,7 @@ export function TopicDetailPage() {
 
       // Fetch user ratings and TODO status in parallel if logged in
       if (userId && data?.items && data.items.length > 0) {
+        setLoadingUserData(true)
         const itemIds = data.items.map(i => i.id)
         const [ratingsResult, todoResult] = await Promise.all([
           statsService.getUserRatingsBatch(itemIds, userId),
@@ -170,6 +172,7 @@ export function TopicDetailPage() {
         if (todoResult.data) {
           setTodoStatus(todoResult.data)
         }
+        setLoadingUserData(false)
       }
     } finally {
       setSearching(false)
@@ -197,6 +200,7 @@ export function TopicDetailPage() {
       setUserRatings(new Map())
       setTodoStatus(new Set())
       setTotalCount(0)
+      setLoadingUserData(false)
       setSelectedItem(null)
       setIsModalOpen(false)
 
@@ -236,6 +240,14 @@ export function TopicDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, user?.id])
 
+  // Reset to page 1 when filter or search changes
+  useEffect(() => {
+    if (!loading && topic) {
+      setCurrentPage(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery, activeFilter])
+
   // Fetch items when search/filter/page changes (but not on initial mount)
   useEffect(() => {
     if (!topic || loading) return
@@ -243,13 +255,6 @@ export function TopicDetailPage() {
     fetchItems(topic.id, debouncedSearchQuery, activeFilter, currentPage, user?.id || null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchQuery, activeFilter, currentPage, topic, loading, user?.id])
-
-  // Reset to page 1 when filter or search changes
-  useEffect(() => {
-    if (!loading && topic) {
-      setCurrentPage(1)
-    }
-  }, [debouncedSearchQuery, activeFilter, loading, topic])
 
   // Memoize event handlers to prevent unnecessary re-renders
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -472,25 +477,32 @@ export function TopicDetailPage() {
         {/* Items Grid or Empty State */}
         {items.length > 0 ? (
           <>
-            <StaggerContainer
-              key={`${debouncedSearchQuery}-${activeFilter}-${currentPage}`}
-              className="grid grid-cols-2 md:grid-cols-3 gap-4"
-            >
-              {items.map((item) => (
-                <StaggerItem key={item.id}>
-                  <ItemCard
-                    item={{ ...item, topic }}
-                    onClick={() => handleItemClick(item)}
-                    avgRating={item.avg_rating}
-                    ratingCount={item.rating_count}
-                    initialUserRating={userRatings.get(item.id) ?? null}
-                    isInTodo={todoStatus.has(item.id)}
-                    onAddToTodo={() => handleAddToTodo(item.id)}
-                    onRemoveFromTodo={() => handleRemoveFromTodo(item.id)}
-                  />
-                </StaggerItem>
-              ))}
-            </StaggerContainer>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <AnimatePresence mode="popLayout">
+                {items.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ItemCard
+                      item={{ ...item, topic }}
+                      onClick={() => handleItemClick(item)}
+                      avgRating={item.avg_rating}
+                      ratingCount={item.rating_count}
+                      initialUserRating={userRatings.get(item.id) ?? null}
+                      isInTodo={todoStatus.has(item.id)}
+                      onAddToTodo={() => handleAddToTodo(item.id)}
+                      onRemoveFromTodo={() => handleRemoveFromTodo(item.id)}
+                      isUserDataLoading={loadingUserData}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
 
             {/* Pagination */}
             <Pagination

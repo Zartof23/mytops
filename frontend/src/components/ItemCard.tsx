@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +39,8 @@ interface ItemCardProps {
   onAddToTodo?: () => void
   /** Callback when removing from TODO list */
   onRemoveFromTodo?: () => void
+  /** Whether user data (rating/TODO status) is still loading */
+  isUserDataLoading?: boolean
 }
 
 const SOURCE_BADGES = {
@@ -123,7 +126,8 @@ const ItemCardComponent = ({
   disableHoverAnimation = false,
   isInTodo = false,
   onAddToTodo,
-  onRemoveFromTodo
+  onRemoveFromTodo,
+  isUserDataLoading = false
 }: ItemCardProps) => {
   const { user } = useAuthStore()
   const [userRating, setUserRating] = useState<number | null>(
@@ -267,44 +271,52 @@ const ItemCardComponent = ({
             onMouseDown={(e) => e.stopPropagation()}
             className="space-y-2"
           >
-            <div className="flex items-center justify-between">
-              <StarRating
-                value={userRating}
-                onChange={user ? handleRatingChange : undefined}
-                disabled={isLoading}
-                size="sm"
-                readOnly={!user}
-              />
-              {/* TODO list button - show if user is logged in and hasn't rated */}
-              {user && !userRating && onAddToTodo && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={isInTodo ? 'secondary' : 'ghost'}
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={handleTodoClick}
-                    >
-                      {isInTodo ? (
-                        <Check className="h-3 w-3" />
-                      ) : (
-                        <Plus className="h-3 w-3" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">
-                      {isInTodo ? 'Remove from list' : 'Add to watch later'}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {!user && (
-                <p className="text-[10px] text-muted-foreground">
-                  Sign in to rate
-                </p>
-              )}
-            </div>
+            {/* Show skeleton while loading user data */}
+            {user && isUserDataLoading ? (
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-6 w-6 rounded" />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <StarRating
+                  value={userRating}
+                  onChange={user ? handleRatingChange : undefined}
+                  disabled={isLoading}
+                  size="sm"
+                  readOnly={!user}
+                />
+                {/* TODO list button - show if user is logged in and hasn't rated */}
+                {user && !userRating && onAddToTodo && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={isInTodo ? 'secondary' : 'ghost'}
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleTodoClick}
+                      >
+                        {isInTodo ? (
+                          <Check className="h-3 w-3" />
+                        ) : (
+                          <Plus className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p className="text-xs">
+                        {isInTodo ? 'Remove from list' : 'Add to watch later'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {!user && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Sign in to rate
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Community stats - now using StarRating instead of Progress */}
             {showCommunityStats && (
@@ -385,6 +397,7 @@ export const ItemCard = memo(ItemCardComponent, (prevProps, nextProps) => {
     prevProps.isInTodo === nextProps.isInTodo &&
     prevProps.showRating === nextProps.showRating &&
     prevProps.disableHoverAnimation === nextProps.disableHoverAnimation &&
+    prevProps.isUserDataLoading === nextProps.isUserDataLoading &&
     prevProps.onClick === nextProps.onClick &&
     prevProps.onAddToTodo === nextProps.onAddToTodo &&
     prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo

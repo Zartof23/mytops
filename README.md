@@ -49,7 +49,6 @@ Open http://localhost:5173
 ```
 mytops/
 ├── docs/
-│   ├── ARCHITECTURE_PLAN.md  # Full architecture
 │   └── CHANGELOG.md          # Decision log
 ├── frontend/                 # React app
 │   ├── src/
@@ -73,7 +72,6 @@ This app embraces a minimal, honest design with a touch of self-deprecating humo
 
 ## Documentation
 
-- [Architecture Plan](docs/ARCHITECTURE_PLAN.md)
 - [Changelog](docs/CHANGELOG.md)
 
 ## License
