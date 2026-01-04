@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
@@ -22,32 +22,37 @@ import { toast } from 'sonner'
 import type { Topic, ItemWithStats } from '../types'
 
 // Witty taglines for each topic
-const topicTaglines: Record<string, string> = {
+const TOPIC_TAGLINES: Record<string, string> = {
   movies: 'Every masterpiece. Every guilty pleasure.',
   series: 'The ones you binged. The ones you pretend you didn\'t.',
   books: 'The ones you finished. The ones collecting dust.',
   anime: 'Your gateway into degeneracy. Own it.',
   games: 'Hundreds of hours well spent. Arguably.',
   restaurants: 'The spots you\'d actually recommend.',
-}
+} as const
+
+const ITEMS_PER_PAGE = 24
+const SEARCH_DEBOUNCE_MS = 300
+const NEW_RELEASE_DAYS = 30
 
 type FilterOption = 'all' | '5star' | '4plus' | 'new'
 
-const ITEMS_PER_PAGE = 24
-
-// Map filter options to database parameters
-function getFilterParams(filter: FilterOption): {
+interface FilterParams {
   minAvgRating?: number
   releasedAfter?: Date
-} {
+}
+
+/**
+ * Map filter options to database query parameters.
+ */
+function getFilterParams(filter: FilterOption): FilterParams {
   switch (filter) {
     case '5star':
       return { minAvgRating: 4.8 }
     case '4plus':
       return { minAvgRating: 4.0 }
     case 'new':
-      // Last 30 days
-      return { releasedAfter: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      return { releasedAfter: new Date(Date.now() - NEW_RELEASE_DAYS * 24 * 60 * 60 * 1000) }
     default:
       return {}
   }
@@ -67,16 +72,30 @@ function ItemsSkeleton() {
   )
 }
 
+/**
+ * Topic detail page displaying items for a specific topic with search,
+ * filtering, and pagination capabilities.
+ *
+ * Features:
+ * - Server-side filtering and pagination for performance
+ * - Debounced search to reduce API calls
+ * - Optimistic UI updates for ratings and TODO list
+ * - Accessible keyboard navigation and ARIA labels
+ * - Reduced motion support
+ */
 export function TopicDetailPage() {
   const { slug } = useParams<{ slug: string }>()
   const { user } = useAuthStore()
   const prefersReducedMotion = useReducedMotion()
 
+  // Topic and items data
   const [topic, setTopic] = useState<Topic | null>(null)
   const [items, setItems] = useState<ItemWithStats[]>([])
   const [userRatings, setUserRatings] = useState<Map<string, number>>(new Map())
   const [todoStatus, setTodoStatus] = useState<Set<string>>(new Set())
   const [totalCount, setTotalCount] = useState(0)
+
+  // UI state
   const [currentPage, setCurrentPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<FilterOption>('all')
@@ -88,109 +107,89 @@ export function TopicDetailPage() {
   const [selectedItem, setSelectedItem] = useState<ItemWithStats | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  // Track last fetched params to prevent duplicate calls
-  const lastFetchParams = useRef<string | null>(null)
-  const hasFetchedTopic = useRef(false)
-  const currentSlug = useRef<string | null>(null)
+  // Debounce search query to reduce API calls
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, SEARCH_DEBOUNCE_MS)
 
-  // Debounce search query - waits 300ms after user stops typing
-  const debouncedSearchQuery = useDebouncedValue(searchQuery, 300)
+  // Memoized computed values
+  const tagline = useMemo(
+    () => (topic ? TOPIC_TAGLINES[topic.slug] || topic.description : null),
+    [topic]
+  )
+  const totalPages = useMemo(
+    () => Math.ceil(totalCount / ITEMS_PER_PAGE),
+    [totalCount]
+  )
 
-  // Get tagline for current topic
-  const tagline = topic ? topicTaglines[topic.slug] || topic.description : null
-  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
-
-  // Fetch items with server-side filtering
+  /**
+   * Fetch items with server-side filtering and pagination.
+   * Also fetches user ratings and TODO status if user is logged in.
+   *
+   * This function is stable (no dependencies) and passed all params explicitly,
+   * so it doesn't need to be in useEffect dependency arrays.
+   */
   const fetchItems = useCallback(async (
     topicId: string,
     query: string,
     filter: FilterOption,
-    page: number
-  ) => {
-    const fetchKey = `${topicId}-${query}-${filter}-${page}`
-
-    // Prevent duplicate fetches
-    if (lastFetchParams.current === fetchKey) {
-      return
-    }
-    lastFetchParams.current = fetchKey
-
+    page: number,
+    userId: string | null
+  ): Promise<void> => {
     setSearching(true)
 
-    const filterParams = getFilterParams(filter)
+    try {
+      const filterParams = getFilterParams(filter)
 
-    const { data, error: fetchError } = await statsService.getFilteredItems({
-      topicId,
-      searchQuery: query || undefined,
-      minAvgRating: filterParams.minAvgRating,
-      releasedAfter: filterParams.releasedAfter,
-      limit: ITEMS_PER_PAGE,
-      offset: (page - 1) * ITEMS_PER_PAGE
-    })
+      const { data, error: fetchError } = await statsService.getFilteredItems({
+        topicId,
+        searchQuery: query || undefined,
+        minAvgRating: filterParams.minAvgRating,
+        releasedAfter: filterParams.releasedAfter,
+        limit: ITEMS_PER_PAGE,
+        offset: (page - 1) * ITEMS_PER_PAGE
+      })
 
-    if (fetchError) {
-      console.error('Error fetching items:', fetchError)
+      if (fetchError) {
+        console.error('Error fetching items:', fetchError)
+        return
+      }
+
+      setItems(data?.items || [])
+      setTotalCount(data?.totalCount || 0)
+
+      // Fetch user ratings and TODO status in parallel if logged in
+      if (userId && data?.items && data.items.length > 0) {
+        const itemIds = data.items.map(i => i.id)
+        const [ratingsResult, todoResult] = await Promise.all([
+          statsService.getUserRatingsBatch(itemIds, userId),
+          todoService.getTodoStatusBatch(itemIds)
+        ])
+
+        if (ratingsResult.data) {
+          setUserRatings(ratingsResult.data)
+        }
+        if (todoResult.data) {
+          setTodoStatus(todoResult.data)
+        }
+      }
+    } finally {
       setSearching(false)
-      return
     }
+  }, [])
 
-    setItems(data?.items || [])
-    setTotalCount(data?.totalCount || 0)
-
-    // Fetch user ratings and TODO status for these items if logged in
-    if (user && data?.items && data.items.length > 0) {
-      const itemIds = data.items.map(i => i.id)
-      const [ratingsResult, todoResult] = await Promise.all([
-        statsService.getUserRatingsBatch(itemIds, user.id),
-        todoService.getTodoStatusBatch(itemIds)
-      ])
-      if (ratingsResult.data) {
-        setUserRatings(ratingsResult.data)
-      }
-      if (todoResult.data) {
-        setTodoStatus(todoResult.data)
-      }
-    }
-
-    setSearching(false)
-  }, [user])
-
-  // Fetch topic on mount
+  // Fetch topic on mount and when slug changes
   useEffect(() => {
-    async function fetchTopic() {
+    const abortController = new AbortController()
+
+    async function loadTopic() {
       if (!slug) {
         setError('No topic specified')
         setLoading(false)
         return
       }
 
-      // Prevent duplicate fetch on StrictMode or when only fetchItems ref changed
-      if (hasFetchedTopic.current && currentSlug.current === slug) return
-      hasFetchedTopic.current = true
-      currentSlug.current = slug
-
-      const { data, error: topicError } = await supabase
-        .from('topics')
-        .select('*')
-        .eq('slug', slug)
-        .single()
-
-      if (topicError) {
-        setError(topicError.message)
-        setLoading(false)
-        return
-      }
-
-      setTopic(data)
-      // Initial fetch
-      await fetchItems(data.id, '', 'all', 1)
-      setLoading(false)
-    }
-
-    // Only reset state when slug actually changes
-    if (currentSlug.current !== slug) {
-      lastFetchParams.current = null
-      hasFetchedTopic.current = false
+      // Reset state when navigating to different topic
+      setLoading(true)
+      setError(null)
       setSearchQuery('')
       setActiveFilter('all')
       setCurrentPage(1)
@@ -200,124 +199,161 @@ export function TopicDetailPage() {
       setTotalCount(0)
       setSelectedItem(null)
       setIsModalOpen(false)
+
+      try {
+        const { data, error: topicError } = await supabase
+          .from('topics')
+          .select('*')
+          .eq('slug', slug)
+          .single()
+
+        if (abortController.signal.aborted) return
+
+        if (topicError) {
+          setError(topicError.message)
+          setLoading(false)
+          return
+        }
+
+        setTopic(data)
+        // Initial fetch with no filters
+        await fetchItems(data.id, '', 'all', 1, user?.id || null)
+        setLoading(false)
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          console.error('Error loading topic:', err)
+          setError('Failed to load topic')
+          setLoading(false)
+        }
+      }
     }
 
-    fetchTopic()
-  }, [slug, fetchItems])
+    loadTopic()
 
-  // Fetch items when search/filter/page changes
+    return () => {
+      abortController.abort()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, user?.id])
+
+  // Fetch items when search/filter/page changes (but not on initial mount)
   useEffect(() => {
     if (!topic || loading) return
 
-    fetchItems(topic.id, debouncedSearchQuery, activeFilter, currentPage)
-  }, [debouncedSearchQuery, activeFilter, currentPage, topic, loading, fetchItems])
+    fetchItems(topic.id, debouncedSearchQuery, activeFilter, currentPage, user?.id || null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery, activeFilter, currentPage, topic, loading, user?.id])
 
   // Reset to page 1 when filter or search changes
   useEffect(() => {
-    setCurrentPage(1)
-  }, [debouncedSearchQuery, activeFilter])
+    if (!loading && topic) {
+      setCurrentPage(1)
+    }
+  }, [debouncedSearchQuery, activeFilter, loading, topic])
 
-  // Handle search input
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
-  }
+  }, [])
 
-  // Handle filter change
-  const handleFilterChange = (filter: FilterOption) => {
+  const handleFilterChange = useCallback((filter: FilterOption) => {
     setActiveFilter(filter)
-  }
+  }, [])
 
-  // Handle page change
-  const handlePageChange = (page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page)
-    // Scroll to top of results
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  }, [])
 
-  // Handle item click - open modal
-  const handleItemClick = (item: ItemWithStats) => {
-    // Attach topic to item for modal display
-    setSelectedItem({ ...item, topic } as ItemWithStats & { topic: Topic })
+  const handleItemClick = useCallback((item: ItemWithStats) => {
+    if (!topic) return
+    // Create item with topic reference for modal
+    const itemWithTopic: ItemWithStats & { topic: Topic } = { ...item, topic }
+    setSelectedItem(itemWithTopic)
     setIsModalOpen(true)
-  }
+  }, [topic])
 
-  // Handle rating change from modal
-  const handleRatingChange = async (rating: number) => {
-    if (!selectedItem || !topic) return
+  const handleRatingChange = useCallback(async (rating: number) => {
+    if (!selectedItem) return
+
+    const itemId = selectedItem.id
 
     // Optimistic update
-    const newUserRatings = new Map(userRatings)
-    newUserRatings.set(selectedItem.id, rating)
-    setUserRatings(newUserRatings)
+    setUserRatings(prev => {
+      const updated = new Map(prev)
+      updated.set(itemId, rating)
+      return updated
+    })
 
     // Remove from TODO if rated
-    if (todoStatus.has(selectedItem.id)) {
-      const newTodoStatus = new Set(todoStatus)
-      newTodoStatus.delete(selectedItem.id)
-      setTodoStatus(newTodoStatus)
-    }
+    setTodoStatus(prev => {
+      if (!prev.has(itemId)) return prev
+      const updated = new Set(prev)
+      updated.delete(itemId)
+      return updated
+    })
 
     // Save to database
     const { error: ratingError } = await ratingService.upsertRating({
-      item_id: selectedItem.id,
+      item_id: itemId,
       rating
     })
 
     if (ratingError) {
       // Rollback on error
-      const rollbackRatings = new Map(userRatings)
-      rollbackRatings.delete(selectedItem.id)
-      setUserRatings(rollbackRatings)
+      setUserRatings(prev => {
+        const rollback = new Map(prev)
+        rollback.delete(itemId)
+        return rollback
+      })
       toast.error("Couldn't save that. The database is judging you.")
     } else {
       toast.success('Noted. Your taste is... interesting.')
     }
-  }
+  }, [selectedItem])
 
-  // Handle add to TODO from modal or card
-  const handleAddToTodo = async (itemId: string) => {
+  const handleAddToTodo = useCallback(async (itemId: string) => {
     if (!topic) return
 
     // Optimistic update
-    const newTodoStatus = new Set(todoStatus)
-    newTodoStatus.add(itemId)
-    setTodoStatus(newTodoStatus)
+    setTodoStatus(prev => new Set(prev).add(itemId))
 
     const { error: todoError } = await todoService.addToTodo(itemId, topic.id)
 
     if (todoError) {
       // Rollback on error
-      const rollbackTodoStatus = new Set(todoStatus)
-      rollbackTodoStatus.delete(itemId)
-      setTodoStatus(rollbackTodoStatus)
+      setTodoStatus(prev => {
+        const rollback = new Set(prev)
+        rollback.delete(itemId)
+        return rollback
+      })
       toast.error("Couldn't add to list. Try again?")
     } else {
       toast.success('Added to your list. No pressure to actually watch it.')
     }
-  }
+  }, [topic])
 
-  // Handle remove from TODO
-  const handleRemoveFromTodo = async (itemId: string) => {
+  const handleRemoveFromTodo = useCallback(async (itemId: string) => {
     // Optimistic update
-    const newTodoStatus = new Set(todoStatus)
-    newTodoStatus.delete(itemId)
-    setTodoStatus(newTodoStatus)
+    setTodoStatus(prev => {
+      const updated = new Set(prev)
+      updated.delete(itemId)
+      return updated
+    })
 
     const { error: todoError } = await todoService.removeFromTodo(itemId)
 
     if (todoError) {
       // Rollback on error
-      const rollbackTodoStatus = new Set(todoStatus)
-      rollbackTodoStatus.add(itemId)
-      setTodoStatus(rollbackTodoStatus)
+      setTodoStatus(prev => new Set(prev).add(itemId))
       toast.error("Couldn't remove from list.")
     }
-  }
+  }, [])
 
   // Loading state
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto" role="status" aria-live="polite">
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <Skeleton className="h-10 w-10 rounded" />
@@ -327,6 +363,7 @@ export function TopicDetailPage() {
         </div>
         <Skeleton className="h-10 w-full mb-6" />
         <ItemsSkeleton />
+        <span className="sr-only">Loading topic details...</span>
       </div>
     )
   }
@@ -337,7 +374,9 @@ export function TopicDetailPage() {
       <PageTransition>
         <div className="max-w-4xl mx-auto">
           <Card className="p-8 text-center">
-            <p className="text-destructive mb-2 font-medium">Topic not found</p>
+            <p className="text-destructive mb-2 font-medium" role="alert">
+              Topic not found
+            </p>
             <p className="text-sm text-muted-foreground mb-4">
               {error || "Maybe it ran away. Topics do that sometimes."}
             </p>

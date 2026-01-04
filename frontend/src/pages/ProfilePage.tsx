@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
@@ -113,83 +113,115 @@ export function ProfilePage() {
   useEffect(() => {
     if (!user) return
 
+    const abortController = new AbortController()
+
     async function fetchData() {
-      // Fetch profile
-      const { data: profileData } = await profileService.getCurrentProfile()
-      if (profileData) {
-        setProfile(profileData)
-      }
+      if (!user) return
 
-      // Fetch ratings
-      const { data: ratings, error } = await supabase
-        .from('user_ratings')
-        .select(`
-          *,
-          item:items (
-            *,
-            topic:topics (*)
-          )
-        `)
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false })
+      try {
+        // Fetch profile and ratings in parallel
+        const [profileResult, ratingsResult] = await Promise.all([
+          profileService.getCurrentProfile(),
+          supabase
+            .from('user_ratings')
+            .select(`
+              *,
+              item:items (
+                *,
+                topic:topics (*)
+              )
+            `)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+        ])
 
-      if (error) {
-        console.error('Error fetching ratings:', error)
-        setLoading(false)
-        return
-      }
+        if (abortController.signal.aborted) return
 
-      const typedRatings = (ratings || []) as RatingWithItem[]
-
-      // Get top rated (5 stars)
-      setTopRated(typedRatings.filter((r) => r.rating === 5).slice(0, 10))
-
-      // Group ratings by topic
-      const grouped: Record<string, RatingsByTopic> = {}
-
-      for (const rating of typedRatings) {
-        const item = rating.item
-        const topic = item?.topic
-
-        if (!topic) continue
-
-        if (!grouped[topic.id]) {
-          grouped[topic.id] = { topic, ratings: [] }
+        // Set profile
+        if (profileResult.data) {
+          setProfile(profileResult.data)
         }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { topic: _, ...itemWithoutTopic } = item
-        grouped[topic.id].ratings.push({
-          id: rating.id,
-          rating: rating.rating,
-          notes: rating.notes,
-          item: itemWithoutTopic
-        })
+
+        // Handle ratings
+        if (ratingsResult.error) {
+          console.error('Error fetching ratings:', ratingsResult.error)
+          setLoading(false)
+          return
+        }
+
+        const ratings = (ratingsResult.data || []) as RatingWithItem[]
+
+        // Get top rated (5 stars)
+        const topRatedItems = ratings
+          .filter((r) => r.rating === 5)
+          .slice(0, 10)
+        setTopRated(topRatedItems)
+
+        // Group ratings by topic
+        const grouped: Record<string, RatingsByTopic> = {}
+
+        for (const rating of ratings) {
+          const item = rating.item
+          const topic = item?.topic
+
+          if (!topic) continue
+
+          if (!grouped[topic.id]) {
+            grouped[topic.id] = { topic, ratings: [] }
+          }
+
+          // Remove topic from item to avoid duplication
+          const { topic: _omitted, ...itemWithoutTopic } = item
+          grouped[topic.id].ratings.push({
+            id: rating.id,
+            rating: rating.rating,
+            notes: rating.notes,
+            item: itemWithoutTopic
+          })
+        }
+
+        const groupedArray = Object.values(grouped).sort(
+          (a, b) => b.ratings.length - a.ratings.length
+        )
+
+        setRatingsByTopic(groupedArray)
+
+        // Set first topic as active tab (only if not already set)
+        if (groupedArray.length > 0 && !activeTab) {
+          setActiveTab(groupedArray[0].topic.id)
+        }
+
+        setLoading(false)
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          console.error('Error fetching profile data:', err)
+          setLoading(false)
+        }
       }
-
-      const groupedArray = Object.values(grouped).sort(
-        (a, b) => b.ratings.length - a.ratings.length
-      )
-      setRatingsByTopic(groupedArray)
-
-      // Set first topic as active tab (only if not already set)
-      setActiveTab((prev) => prev || (groupedArray.length > 0 ? groupedArray[0].topic.id : ''))
-
-      setLoading(false)
     }
 
     fetchData()
-  }, [user]) // Removed activeTab - it was causing double fetch
 
-  const handleShare = async () => {
+    return () => {
+      abortController.abort()
+    }
+  }, [user])
+
+  const handleShare = useCallback(async () => {
     if (!profile?.username) {
       toast.error("Set a username first to share your profile.")
       return
     }
 
     const url = `${window.location.origin}/@${profile.username}`
-    await navigator.clipboard.writeText(url)
-    toast.success("Profile link copied!")
-  }
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success("Profile link copied!")
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err)
+      toast.error("Couldn't copy link. Try selecting and copying manually.")
+    }
+  }, [profile?.username])
 
   // Get user initials for avatar
   const initials = useMemo(() => {
@@ -204,8 +236,9 @@ export function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto" role="status" aria-live="polite">
         <ProfileSkeleton />
+        <span className="sr-only">Loading profile...</span>
       </div>
     )
   }

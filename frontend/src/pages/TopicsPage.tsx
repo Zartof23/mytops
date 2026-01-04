@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
@@ -8,10 +8,15 @@ import { SEO } from '@/components/SEO'
 import { PageTransition, StaggerContainer, StaggerItem } from '@/components/PageTransition'
 import type { Topic } from '../types'
 
+const SKELETON_CARDS_COUNT = 6
+
+/**
+ * Skeleton loading state for topic cards.
+ */
 function TopicsSkeleton() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-      {[...Array(6)].map((_, i) => (
+      {Array.from({ length: SKELETON_CARDS_COUNT }, (_, i) => (
         <Card key={i} className="p-0 overflow-hidden">
           <Skeleton className="h-20 w-full" />
           <div className="p-5">
@@ -25,42 +30,68 @@ function TopicsSkeleton() {
   )
 }
 
+/**
+ * Topics page displaying all available topic categories.
+ *
+ * Features:
+ * - Fetches and displays topic categories from database
+ * - Skeleton loading states
+ * - Responsive grid layout
+ * - Accessible navigation and ARIA labels
+ * - Reduced motion support
+ */
 export function TopicsPage() {
   const [topics, setTopics] = useState<Topic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const prefersReducedMotion = useReducedMotion()
 
-  // Prevent duplicate fetch on React StrictMode
-  const hasFetched = useRef(false)
+  // Memoize empty state check
+  const hasTopics = useMemo(() => topics.length > 0, [topics.length])
 
   useEffect(() => {
-    if (hasFetched.current) return
-    hasFetched.current = true
+    const abortController = new AbortController()
 
-    async function fetchTopics() {
-      const { data, error } = await supabase
-        .from('topics')
-        .select('*')
-        .order('name')
+    async function fetchTopics(signal: AbortSignal): Promise<void> {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('topics')
+          .select('*')
+          .order('name')
 
-      if (error) {
-        setError(error.message)
-      } else {
-        setTopics(data || [])
+        if (signal.aborted) return
+
+        if (fetchError) {
+          setError(fetchError.message)
+        } else {
+          setTopics(data || [])
+        }
+      } catch (err) {
+        if (!signal.aborted) {
+          console.error('Error fetching topics:', err)
+          setError('Failed to load topics')
+        }
+      } finally {
+        if (!signal.aborted) {
+          setLoading(false)
+        }
       }
-      setLoading(false)
     }
 
-    fetchTopics()
+    fetchTopics(abortController.signal)
+
+    return () => {
+      abortController.abort()
+    }
   }, [])
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto" role="status" aria-live="polite">
         <Skeleton className="h-7 w-24 mb-2" />
         <Skeleton className="h-4 w-64 mb-8" />
         <TopicsSkeleton />
+        <span className="sr-only">Loading topics...</span>
       </div>
     )
   }
@@ -70,7 +101,9 @@ export function TopicsPage() {
       <PageTransition>
         <div className="max-w-4xl mx-auto">
           <Card className="p-8 text-center">
-            <p className="text-destructive mb-2 font-medium">Something went wrong</p>
+            <p className="text-destructive mb-2 font-medium" role="alert">
+              Something went wrong
+            </p>
             <p className="text-sm text-muted-foreground">{error}</p>
             <p className="text-xs text-muted-foreground italic mt-4">
               Honestly, I'm surprised it worked this long.
@@ -101,8 +134,8 @@ export function TopicsPage() {
           </p>
         </motion.div>
 
-        {topics.length === 0 ? (
-          <Card className="p-8 text-center">
+        {!hasTopics ? (
+          <Card className="p-8 text-center" role="status">
             <p className="text-muted-foreground mb-2">No topics yet.</p>
             <p className="text-xs text-muted-foreground italic">
               The database is as empty as my design skills.
