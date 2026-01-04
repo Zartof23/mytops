@@ -4,6 +4,58 @@ All notable decisions and changes to this project will be documented in this fil
 
 ---
 
+## [2026-01-04] Rewrite README.md with Accurate Project State
+
+### Problem
+README.md contained outdated and misleading information:
+1. **False claims**: Stated AI enrichment was working ("AI Creates Missing Items" in How It Works)
+2. **Incorrect project structure**: Said "No local supabase/ folder needed" when migrations ARE version-controlled locally
+3. **Missing critical info**: No mention of current MVP 1 capabilities, limitations, testing coverage, or documentation structure
+4. **Poor developer onboarding**: Minimal quick start, no contributing guidelines, no link to comprehensive docs
+
+### What Changed
+**Complete rewrite of README.md** to align with documentation in `docs/*`:
+
+1. **Accurate current state**:
+   - Added "What You Can Do Now (MVP 1)" section listing working features
+   - Added "Current Limitations" section clarifying AI enrichment is NOT yet implemented
+   - Moved AI enrichment to "The Vision" section (future capability)
+   - Simplified authentication features (removed implementation details like "automatic profile creation")
+
+2. **Corrected technical information**:
+   - Fixed project structure to include `supabase/migrations/` folder
+   - Updated tech stack table to clarify AI is "coming in MVP 2"
+   - Added production URL: https://mytops.io
+
+3. **Simplified documentation structure**:
+   - Added links to all docs/* files (ARCHITECTURE, DEVELOPMENT_GUIDELINES, ROADMAP, CHANGELOG, CLAUDE.md)
+   - Development Guidelines section now only links to full documentation (no inline content)
+   - Removed Database section (details in ARCHITECTURE.md)
+   - Removed Deployment section (details in ARCHITECTURE.md)
+   - Added Testing section highlighting 50+ tests
+   - Added Environment Variables section with security guidance
+
+4. **Better developer experience**:
+   - Expanded Quick Start with prerequisites, setup, testing, building
+   - Added Contributing section pointing to mandatory documentation
+   - Improved structure following standard GitHub README conventions
+   - Added "The Vibe" section capturing brand personality
+   - Kept README focused on essentials, delegating details to docs/*
+
+### Why This Change
+- **Documentation is Law**: README must reflect actual project state (Development Guidelines pillar #3)
+- **False expectations**: Users and contributors were misled about AI capabilities
+- **Poor onboarding**: Developers had minimal guidance on setup, testing, contributing
+- **Information scattered**: Critical info was only in docs/* with no README links
+
+### Breaking Changes
+None - purely documentation update
+
+### Migration
+None required - this is a documentation-only change
+
+---
+
 ## [2026-01-04] Add Skeleton Loading for User Data in ItemCard
 
 ### Problem
