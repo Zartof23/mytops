@@ -19,7 +19,7 @@ import { SEO } from '@/components/SEO'
 import { PageTransition } from '@/components/PageTransition'
 import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Topic, ItemWithStats } from '../types'
+import type { Topic, ItemWithStats } from '@/types'
 
 // Witty taglines for each topic
 const TOPIC_TAGLINES: Record<string, string> = {
@@ -431,7 +431,10 @@ export function TopicDetailPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <label htmlFor="search" className="sr-only">
+            Search {topic.name.toLowerCase()}
+          </label>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
             id="search"
             type="text"
@@ -439,10 +442,12 @@ export function TopicDetailPage() {
             value={searchQuery}
             onChange={handleSearchChange}
             className="h-10 pl-9"
+            aria-label={`Search ${topic.name.toLowerCase()}`}
           />
           {searching && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2" role="status" aria-live="polite">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="sr-only">Searching...</span>
             </span>
           )}
         </motion.div>
@@ -473,7 +478,7 @@ export function TopicDetailPage() {
 
           {/* Results count */}
           {!searching && (
-            <Badge variant="secondary" className="ml-auto h-7 px-3">
+            <Badge variant="secondary" className="ml-auto h-7 px-3" role="status" aria-live="polite">
               {totalCount} {totalCount === 1 ? 'item' : 'items'}
             </Badge>
           )}
@@ -561,3 +566,5 @@ export function TopicDetailPage() {
     </PageTransition>
   )
 }
+
+export default TopicDetailPage

@@ -1,12 +1,12 @@
 import { memo, useCallback, useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
 import { LazyImage } from './LazyImage'
 import { Plus, Check } from 'lucide-react'
-import type { Item, Topic } from '../types'
+import type { Item, Topic } from '@/types'
 
 interface ItemDetailModalProps {
   item: (Item & { topic?: Topic }) | null
@@ -151,6 +151,9 @@ const ItemDetailModalComponent = ({
             {item.topic?.icon && <span className="text-xl">{item.topic.icon}</span>}
             <span className="line-clamp-2">{item.name}</span>
           </DialogTitle>
+          <DialogDescription>
+            {item.description || `View details and ratings for ${item.name}`}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Hero Image */}
@@ -164,13 +167,6 @@ const ItemDetailModalComponent = ({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
           </div>
-        )}
-
-        {/* Description */}
-        {item.description && (
-          <p className="text-sm text-muted-foreground">
-            {item.description}
-          </p>
         )}
 
         {/* Metadata fields */}

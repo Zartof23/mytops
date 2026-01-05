@@ -15,7 +15,7 @@ import { SEO } from '@/components/SEO'
 import { PageTransition, StaggerContainer, StaggerItem, FadeIn } from '@/components/PageTransition'
 import { Share2, Star, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Item, Topic, Profile } from '../types'
+import type { Item, Topic, Profile } from '@/types'
 
 interface RatingWithItem {
   id: string
@@ -411,3 +411,5 @@ export function ProfilePage() {
     </PageTransition>
   )
 }
+
+export default ProfilePage

@@ -4,6 +4,33 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
-# Cache static assets
+# HTML pages - no cache (always fetch fresh)
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Cache static assets (immutable)
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Cache images (1 year)
+*.png
+  Cache-Control: public, max-age=31536000, immutable
+
+*.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+*.svg
+  Cache-Control: public, max-age=31536000, immutable
+
+*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+# Cache manifest and robots
+/site.webmanifest
+  Cache-Control: public, max-age=86400
+
+/robots.txt
+  Cache-Control: public, max-age=86400
+
+/sitemap.xml
+  Cache-Control: public, max-age=86400

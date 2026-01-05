@@ -1,0 +1,10 @@
+# mytops - robots.txt
+# Allow all crawlers to access public content
+
+User-agent: *
+Allow: /
+Disallow: /profile
+Disallow: /auth/
+
+# Sitemap location
+Sitemap: https://mytops.io/sitemap.xml

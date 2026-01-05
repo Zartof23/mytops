@@ -11,6 +11,14 @@ interface LazyImageProps {
   aspectRatio?: 'square' | '16/9' | '4/3' | '3/2' | 'auto'
   /** Loading strategy: lazy (default) or eager */
   loading?: 'lazy' | 'eager'
+  /** Image width in pixels (for CLS optimization) */
+  width?: number
+  /** Image height in pixels (for CLS optimization) */
+  height?: number
+  /** Fetch priority hint for LCP optimization (default: auto) */
+  fetchPriority?: 'high' | 'low' | 'auto'
+  /** Sizes attribute for responsive images */
+  sizes?: string
   /** Function to call when image loads */
   onLoad?: () => void
   /** Function to call if image fails to load */
@@ -35,12 +43,17 @@ const ASPECT_RATIOS = {
  * - Placeholder with aspect ratio support
  * - Error state handling
  * - Memoized for performance
+ * - CLS optimization with width/height attributes
+ * - Fetch priority support for LCP optimization
  *
  * @example
  * <LazyImage
  *   src="/image.jpg"
  *   alt="Description"
  *   aspectRatio="16/9"
+ *   width={800}
+ *   height={450}
+ *   fetchPriority="high"
  *   className="rounded-md"
  * />
  */
@@ -51,6 +64,10 @@ const LazyImageComponent = ({
   placeholderClassName = 'bg-muted',
   aspectRatio = 'auto',
   loading = 'lazy',
+  width,
+  height,
+  fetchPriority = 'auto',
+  sizes,
   onLoad,
   onError,
 }: LazyImageProps) => {
@@ -119,6 +136,10 @@ const LazyImageComponent = ({
           src={src}
           alt={alt}
           loading={loading}
+          width={width}
+          height={height}
+          fetchPriority={fetchPriority}
+          sizes={sizes}
           onLoad={handleLoad}
           onError={handleError}
           className={cn(
@@ -152,6 +173,10 @@ export const LazyImage = memo(LazyImageComponent, (prevProps, nextProps) => {
     prevProps.alt === nextProps.alt &&
     prevProps.className === nextProps.className &&
     prevProps.aspectRatio === nextProps.aspectRatio &&
-    prevProps.loading === nextProps.loading
+    prevProps.loading === nextProps.loading &&
+    prevProps.width === nextProps.width &&
+    prevProps.height === nextProps.height &&
+    prevProps.fetchPriority === nextProps.fetchPriority &&
+    prevProps.sizes === nextProps.sizes
   )
 })

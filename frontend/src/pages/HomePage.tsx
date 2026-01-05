@@ -184,13 +184,13 @@ export function HomePage() {
                   <button
                     type="button"
                     onClick={togglePause}
-                    className="p-1 rounded-full hover:bg-muted transition-colors"
+                    className="p-1 rounded-full hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                     aria-label={isPaused ? 'Play carousel' : 'Pause carousel'}
                   >
                     {isPaused ? (
-                      <Play className="w-3 h-3 text-muted-foreground" />
+                      <Play className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
                     ) : (
-                      <Pause className="w-3 h-3 text-muted-foreground" />
+                      <Pause className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
                     )}
                   </button>
 
@@ -202,7 +202,7 @@ export function HomePage() {
                         type="button"
                         role="tab"
                         onClick={() => setCurrentIndex(idx)}
-                        className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                        className={`w-1.5 h-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${
                           idx === currentIndex
                             ? 'bg-foreground'
                             : 'bg-muted-foreground/30'
@@ -226,11 +226,15 @@ export function HomePage() {
           transition={{ duration: 0.3, delay: 0.3 }}
         >
           <Button asChild size="lg">
-            <Link to="/topics">Start Curating</Link>
+            <Link to="/topics" aria-label="Start curating your favorites by browsing topics">
+              Start Curating
+            </Link>
           </Button>
           {!user && (
             <Button variant="outline" size="lg" asChild>
-              <Link to="/register">Create Account</Link>
+              <Link to="/register" aria-label="Create a free account to save your favorites">
+                Create Account
+              </Link>
             </Button>
           )}
         </motion.div>

@@ -157,3 +157,63 @@ export function ItemListSchema({ name, description, items }: ItemListSchemaProps
     />
   )
 }
+
+interface BreadcrumbItem {
+  name: string
+  url: string
+}
+
+interface BreadcrumbListSchemaProps {
+  items: BreadcrumbItem[]
+}
+
+/**
+ * Breadcrumb structured data for navigation hierarchy.
+ * Helps search engines understand site structure.
+ */
+export function BreadcrumbListSchema({ items }: BreadcrumbListSchemaProps) {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: `${BASE_URL}${item.url}`,
+    })),
+  }
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  )
+}
+
+interface CollectionPageSchemaProps {
+  name: string
+  description: string
+  url: string
+}
+
+/**
+ * CollectionPage structured data for topic pages.
+ * Indicates a page that displays a collection of items.
+ */
+export function CollectionPageSchema({ name, description, url }: CollectionPageSchemaProps) {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name,
+    description,
+    url: `${BASE_URL}${url}`,
+  }
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  )
+}

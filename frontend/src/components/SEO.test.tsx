@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import { SEO, WebSiteSchema, ProfileSchema, ItemListSchema } from './SEO'
+import { SEO, WebSiteSchema, ProfileSchema, ItemListSchema, BreadcrumbListSchema, CollectionPageSchema } from './SEO'
 
 /**
  * Note: React 19's native Document Metadata hoists <title>, <meta>, and <link>
@@ -216,6 +216,99 @@ describe('SEO', () => {
       const schema = JSON.parse(script?.textContent || '{}')
 
       expect(schema.itemListElement).toHaveLength(0)
+    })
+  })
+
+  describe('BreadcrumbListSchema', () => {
+    it('should render breadcrumb list schema', () => {
+      const items = [
+        { name: 'Home', url: '/' },
+        { name: 'Topics', url: '/topics' },
+        { name: 'Movies', url: '/topics/movies' }
+      ]
+
+      const { container } = render(
+        <BreadcrumbListSchema items={items} />
+      )
+
+      const script = container.querySelector('script[type="application/ld+json"]')
+      const schema = JSON.parse(script?.textContent || '{}')
+
+      expect(schema['@context']).toBe('https://schema.org')
+      expect(schema['@type']).toBe('BreadcrumbList')
+      expect(schema.itemListElement).toHaveLength(3)
+    })
+
+    it('should format breadcrumb items correctly', () => {
+      const items = [
+        { name: 'Home', url: '/' },
+        { name: 'Topics', url: '/topics' }
+      ]
+
+      const { container } = render(
+        <BreadcrumbListSchema items={items} />
+      )
+
+      const script = container.querySelector('script[type="application/ld+json"]')
+      const schema = JSON.parse(script?.textContent || '{}')
+
+      const firstItem = schema.itemListElement[0]
+      expect(firstItem['@type']).toBe('ListItem')
+      expect(firstItem.position).toBe(1)
+      expect(firstItem.name).toBe('Home')
+      expect(firstItem.item).toBe('https://mytops.io/')
+
+      const secondItem = schema.itemListElement[1]
+      expect(secondItem.position).toBe(2)
+      expect(secondItem.name).toBe('Topics')
+      expect(secondItem.item).toBe('https://mytops.io/topics')
+    })
+
+    it('should handle empty items array', () => {
+      const { container } = render(
+        <BreadcrumbListSchema items={[]} />
+      )
+
+      const script = container.querySelector('script[type="application/ld+json"]')
+      const schema = JSON.parse(script?.textContent || '{}')
+
+      expect(schema.itemListElement).toHaveLength(0)
+    })
+  })
+
+  describe('CollectionPageSchema', () => {
+    it('should render collection page schema', () => {
+      const { container } = render(
+        <CollectionPageSchema
+          name="Movies Collection"
+          description="Browse all movies"
+          url="/topics/movies"
+        />
+      )
+
+      const script = container.querySelector('script[type="application/ld+json"]')
+      const schema = JSON.parse(script?.textContent || '{}')
+
+      expect(schema['@context']).toBe('https://schema.org')
+      expect(schema['@type']).toBe('CollectionPage')
+      expect(schema.name).toBe('Movies Collection')
+      expect(schema.description).toBe('Browse all movies')
+      expect(schema.url).toBe('https://mytops.io/topics/movies')
+    })
+
+    it('should handle various URL formats', () => {
+      const { container } = render(
+        <CollectionPageSchema
+          name="Test Collection"
+          description="Test"
+          url="/test/path"
+        />
+      )
+
+      const script = container.querySelector('script[type="application/ld+json"]')
+      const schema = JSON.parse(script?.textContent || '{}')
+
+      expect(schema.url).toBe('https://mytops.io/test/path')
     })
   })
 })

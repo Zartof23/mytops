@@ -4,14 +4,14 @@ import { useAuthStore } from './store/authStore'
 import { Layout } from './components/Layout'
 import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards'
 import { HomePage } from './pages/HomePage'
-import { LoginPage } from './pages/LoginPage'
-import { RegisterPage } from './pages/RegisterPage'
 import { TopicsPage } from './pages/TopicsPage'
-import { TopicDetailPage } from './pages/TopicDetailPage'
-import { ProfilePage } from './pages/ProfilePage'
 import { AuthCallback } from './pages/AuthCallback'
 
-// Lazy load public profile page for code splitting
+// Lazy load pages for code splitting and improved performance
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const TopicDetailPage = lazy(() => import('./pages/TopicDetailPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage'))
 
 function App() {
@@ -36,7 +36,14 @@ function App() {
         {/* Public routes */}
         <Route index element={<HomePage />} />
         <Route path="topics" element={<TopicsPage />} />
-        <Route path="topics/:slug" element={<TopicDetailPage />} />
+        <Route
+          path="topics/:slug"
+          element={
+            <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>}>
+              <TopicDetailPage />
+            </Suspense>
+          }
+        />
 
         {/* Public profile route - /@username style */}
         <Route
@@ -50,13 +57,34 @@ function App() {
 
         {/* Auth routes - redirect to home if already logged in */}
         <Route element={<PublicOnlyRoute />}>
-          <Route path="login" element={<LoginPage />} />
-          <Route path="register" element={<RegisterPage />} />
+          <Route
+            path="login"
+            element={
+              <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>}>
+                <LoginPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="register"
+            element={
+              <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>}>
+                <RegisterPage />
+              </Suspense>
+            }
+          />
         </Route>
 
         {/* Protected routes - require authentication */}
         <Route element={<ProtectedRoute />}>
-          <Route path="profile" element={<ProfilePage />} />
+          <Route
+            path="profile"
+            element={
+              <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>}>
+                <ProfilePage />
+              </Suspense>
+            }
+          />
         </Route>
       </Route>
       <Route path="/auth/callback" element={<AuthCallback />} />
