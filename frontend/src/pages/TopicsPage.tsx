@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SEO } from '@/components/SEO'
 import { PageTransition, StaggerContainer, StaggerItem } from '@/components/PageTransition'
+import { LazyImage } from '@/components/LazyImage'
 import type { Topic } from '../types'
 
 const SKELETON_CARDS_COUNT = 6
@@ -156,23 +157,27 @@ export function TopicsPage() {
                   >
                     <Card className="p-0 h-full overflow-hidden transition-shadow duration-200 hover:shadow-lg hover:shadow-primary/5">
                       {/* Topic image header */}
-                      {topic.image_url ? (
-                        <div
-                          className="h-20 bg-cover bg-center relative"
-                          style={{
-                            backgroundImage: `url(${topic.image_url})`
-                          }}
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-                          <span className="absolute bottom-2 left-4 text-2xl drop-shadow-md">
-                            {topic.icon}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="h-20 bg-muted/30 relative flex items-center justify-center">
-                          <span className="text-4xl opacity-50">{topic.icon}</span>
-                        </div>
-                      )}
+                      <div className="relative h-24 overflow-hidden">
+                        {topic.image_url ? (
+                          <>
+                            <div className="absolute inset-0">
+                              <LazyImage
+                                src={topic.image_url}
+                                alt={topic.name}
+                                aspectRatio="auto"
+                              />
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
+                            <span className="absolute bottom-2 left-4 text-2xl drop-shadow-lg z-10">
+                              {topic.icon}
+                            </span>
+                          </>
+                        ) : (
+                          <div className="h-full bg-muted/30 flex items-center justify-center">
+                            <span className="text-4xl opacity-50">{topic.icon}</span>
+                          </div>
+                        )}
+                      </div>
                       <div className="p-4">
                         <h2 className="font-medium text-sm">{topic.name}</h2>
                         {topic.description && (

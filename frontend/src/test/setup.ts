@@ -22,3 +22,24 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 })
+
+// Mock IntersectionObserver for LazyImage component
+globalThis.IntersectionObserver = class IntersectionObserver {
+  callback: IntersectionObserverCallback
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback
+  }
+  observe(target: Element) {
+    // Immediately trigger the callback as if the element is intersecting
+    this.callback(
+      [{ isIntersecting: true, target } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver
+    )
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() { return [] }
+  get root() { return null }
+  get rootMargin() { return '0px' }
+  get thresholds() { return [0] }
+} as any

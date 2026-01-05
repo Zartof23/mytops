@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
+import { LazyImage } from './LazyImage'
 import { Plus, Check } from 'lucide-react'
 import type { Item, Topic } from '../types'
 
@@ -152,15 +153,16 @@ const ItemDetailModalComponent = ({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Image */}
+        {/* Hero Image */}
         {imageUrl && (
-          <div className="relative -mx-6 -mt-2">
-            <img
+          <div className="relative -mx-6 -mt-2 h-56 md:h-72 overflow-hidden">
+            <LazyImage
               src={imageUrl}
               alt={item.name}
-              className="w-full h-48 object-cover"
+              className="w-full h-full object-cover"
+              aspectRatio="auto"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
           </div>
         )}
 

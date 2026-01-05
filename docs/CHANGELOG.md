@@ -4,242 +4,6 @@ All notable decisions and changes to this project will be documented in this fil
 
 ---
 
-## [2026-01-04] Rewrite README.md with Accurate Project State
-
-### Problem
-README.md contained outdated and misleading information:
-1. **False claims**: Stated AI enrichment was working ("AI Creates Missing Items" in How It Works)
-2. **Incorrect project structure**: Said "No local supabase/ folder needed" when migrations ARE version-controlled locally
-3. **Missing critical info**: No mention of current MVP 1 capabilities, limitations, testing coverage, or documentation structure
-4. **Poor developer onboarding**: Minimal quick start, no contributing guidelines, no link to comprehensive docs
-
-### What Changed
-**Complete rewrite of README.md** to align with documentation in `docs/*`:
-
-1. **Accurate current state**:
-   - Added "What You Can Do Now (MVP 1)" section listing working features
-   - Added "Current Limitations" section clarifying AI enrichment is NOT yet implemented
-   - Moved AI enrichment to "The Vision" section (future capability)
-   - Simplified authentication features (removed implementation details like "automatic profile creation")
-
-2. **Corrected technical information**:
-   - Fixed project structure to include `supabase/migrations/` folder
-   - Updated tech stack table to clarify AI is "coming in MVP 2"
-   - Added production URL: https://mytops.io
-
-3. **Simplified documentation structure**:
-   - Added links to all docs/* files (ARCHITECTURE, DEVELOPMENT_GUIDELINES, ROADMAP, CHANGELOG, CLAUDE.md)
-   - Development Guidelines section now only links to full documentation (no inline content)
-   - Removed Database section (details in ARCHITECTURE.md)
-   - Removed Deployment section (details in ARCHITECTURE.md)
-   - Added Testing section highlighting 50+ tests
-   - Added Environment Variables section with security guidance
-
-4. **Better developer experience**:
-   - Expanded Quick Start with prerequisites, setup, testing, building
-   - Added Contributing section pointing to mandatory documentation
-   - Improved structure following standard GitHub README conventions
-   - Added "The Vibe" section capturing brand personality
-   - Kept README focused on essentials, delegating details to docs/*
-
-### Why This Change
-- **Documentation is Law**: README must reflect actual project state (Development Guidelines pillar #3)
-- **False expectations**: Users and contributors were misled about AI capabilities
-- **Poor onboarding**: Developers had minimal guidance on setup, testing, contributing
-- **Information scattered**: Critical info was only in docs/* with no README links
-
-### Breaking Changes
-None - purely documentation update
-
-### Migration
-None required - this is a documentation-only change
-
----
-
-## [2026-01-04] Add Skeleton Loading for User Data in ItemCard
-
-### Problem
-When ItemCards loaded on topic pages, they initially showed:
-1. **Empty star rating** (no stars filled)
-2. **Add to watch later button** visible immediately
-
-These UI elements depend on API calls that fetch user ratings and TODO status. During the loading period, users saw incomplete/misleading UI instead of loading indicators.
-
-### Root Cause
-- ItemCards received `initialUserRating={null}` on initial render
-- User data (ratings + TODO status) fetched in batch AFTER items loaded
-- No loading state communicated to ItemCard during this gap
-- Result: Empty stars and TODO button appeared before actual data loaded
-
-### Solution Implemented
-1. **Added `isUserDataLoading` prop to ItemCard**:
-   - New optional boolean prop to indicate user data is loading
-   - Defaults to `false` for backwards compatibility
-
-2. **Skeleton loading state in ItemCard** (`ItemCard.tsx:275-279`):
-   ```tsx
-   {user && isUserDataLoading ? (
-     <div className="flex items-center justify-between">
-       <Skeleton className="h-5 w-24" />  {/* Star rating skeleton */}
-       <Skeleton className="h-6 w-6 rounded" />  {/* TODO button skeleton */}
-     </div>
-   ) : (
-     /* Actual rating UI */
-   )}
-   ```
-
-3. **Loading state tracking in TopicDetailPage**:
-   - Added `loadingUserData` state
-   - Set to `true` when fetching user ratings/TODO status
-   - Set to `false` when batch fetch completes
-   - Reset to `false` when topic changes
-   - Passed to all ItemCard instances
-
-### Impact
-- **Better UX**: Clear loading indicators instead of empty UI
-- **No misleading states**: Users don't see empty stars before data loads
-- **Consistent pattern**: Uses same Skeleton component as other loading states
-- **Fast perceived performance**: Skeletons indicate active loading
-
-### Files Changed
-- `frontend/src/components/ItemCard.tsx`:
-  - Added `isUserDataLoading` prop to interface
-  - Imported Skeleton component
-  - Added conditional skeleton rendering for user data
-  - Updated memo comparison to include new prop
-
-- `frontend/src/pages/TopicDetailPage.tsx`:
-  - Added `loadingUserData` state
-  - Set loading state in `fetchItems` before/after user data fetch
-  - Reset loading state in topic change handler
-  - Passed `isUserDataLoading` to all ItemCard instances
-
-### Testing
-- ✅ All tests pass (96 tests)
-- ✅ Build succeeds with no TypeScript errors
-- ✅ Skeleton displays while user data loads, then shows actual rating/TODO UI
-
----
-
-## [2026-01-04] Fix Topic Filter Rendering Issues
-
-### Problem
-When filtering items on topic pages (e.g., anime → 5★ → All), users experienced:
-1. **Items scattering** - grid positions shifting erratically
-2. **Impagination effects** - items repositioning multiple times before settling
-3. **Invisible but clickable items** - DOM elements present but not visible during animations
-
-### Root Cause Analysis
-1. **StaggerContainer with dynamic key prop** (`TopicDetailPage.tsx:476`):
-   ```tsx
-   <StaggerContainer key={`${debouncedSearchQuery}-${activeFilter}-${currentPage}`}>
-   ```
-   - Caused React to completely unmount/remount the entire grid on filter changes
-   - Destroyed all DOM elements and recreated them from scratch
-   - Triggered full animation sequence replay (stagger delays, fade-in, slide-up)
-
-2. **Stagger animations creating invisible states**:
-   - Items animated from `opacity: 0, y: 12` to `opacity: 1, y: 0` over 0.3s
-   - During animation, items were invisible (`opacity: 0`) but still in DOM (clickable)
-   - Stagger delay (0.05s per item) created sequential "impagination" effect
-
-3. **Multiple useEffect hooks causing redundant fetches**:
-   - One effect reset page to 1 on filter change
-   - Another effect fetched items on filter/page change
-   - Both fired sequentially, causing double renders
-
-### Solution Implemented
-1. **Removed key prop from grid container**:
-   - Let React reuse existing DOM and update children (items already have unique `item.id` keys)
-   - Prevents full grid remount on filter changes
-
-2. **Replaced StaggerContainer with AnimatePresence**:
-   ```tsx
-   <AnimatePresence mode="popLayout">
-     {items.map(item => (
-       <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-   ```
-   - `mode="popLayout"` smoothly repositions items without destroying them
-   - `layout` prop animates position changes automatically
-   - Simpler opacity-only transition (0.2s, no stagger delays)
-   - Proper exit animations for removed items
-
-3. **Kept useEffect hooks separate but simplified**:
-   - First effect: Reset page to 1 when filter/search changes (only depends on those)
-   - Second effect: Fetch items when page/filter/search/topic changes
-   - Accepted potential double fetch on filter change (minor trade-off for code clarity)
-
-### Impact
-- **Visual stability**: Items no longer scatter or reposition multiple times
-- **Performance**: Grid reuses DOM instead of recreating on every filter change
-- **Accessibility**: No invisible clickable elements during transitions
-- **Simpler animations**: Faster, cleaner transitions (0.2s vs 0.3s + stagger delays)
-
-### Files Changed
-- `frontend/src/pages/TopicDetailPage.tsx`:
-  - Added `AnimatePresence` import from framer-motion
-  - Removed `StaggerContainer` and `StaggerItem` imports
-  - Replaced grid container with `AnimatePresence` + `motion.div` with `layout` prop
-  - Simplified animation: opacity-only transition with layout animation
-
-### Testing
-- ✅ All tests pass (96 tests)
-- ✅ Build succeeds with no TypeScript errors
-- ✅ Reproduction steps (anime → 5★ → All) should now show smooth transitions
-
----
-
-## [2026-01-03] Documentation Restructure
-
-### Context
-CLAUDE.md had grown to ~4.6k tokens with mixed concerns (core reference, development guidelines, architecture, roadmap). This caused:
-- High token usage on every conversation
-- Difficulty finding relevant information
-- Outdated/incorrect information (e.g., claiming migrations aren't stored locally when they are)
-- Unclear "what can users do NOW" vs. future plans
-
-### Decision: Split Documentation into Focused Files
-
-**What Changed**:
-- **CLAUDE.md** (new, ~2.5k tokens): Core reference with current E2E flows, quick start, key patterns
-- **docs/DEVELOPMENT_GUIDELINES.md** (new): Mandatory standards, security, testing, code patterns
-- **docs/ROADMAP.md** (new): Current capabilities and future MVPs with clear user flows
-- **docs/ARCHITECTURE.md** (new): Technical details, database schema, RLS policies, deployment
-
-**Rationale**:
-- **Performance**: Load only relevant documentation per task (e.g., only load DEVELOPMENT_GUIDELINES.md when implementing features)
-- **Clarity**: Each file has single responsibility
-- **Accuracy**: Fixed inaccuracies about local migrations and edge functions
-- **Maintainability**: Easier to update specific sections without affecting entire doc
-
-**Specific Fixes in CLAUDE.md**:
-1. **Line 82** (old): "Database migrations and Edge Functions are managed via Supabase Dashboard/MCP, not stored locally."
-   - **Fixed**: "Migrations are version-controlled locally in `supabase/migrations/`. Edge Functions are deployed via Supabase MCP tools and not stored locally."
-
-2. **Line 118** (old): "Database is managed via Supabase Dashboard or MCP tools. No local migration files."
-   - **Fixed**: Clarified local migrations workflow with proper commands
-
-3. **Lines 466-522** (old): Granular checklist of completed tasks mixed with "in progress"
-   - **Fixed**: Replaced with "What Users Can Do Now" section showing 4 working E2E flows and known limitations
-
-**New Structure Benefits**:
-- CLAUDE.md: Always loaded, provides core context and quick reference
-- DEVELOPMENT_GUIDELINES.md: Load when implementing features (security, testing, patterns)
-- ROADMAP.md: Load when planning features or discussing future work
-- ARCHITECTURE.md: Load when making architectural changes or debugging infrastructure
-
-**Migration for AI Agent**:
-- References updated throughout to point to new file locations
-- All content preserved, just reorganized
-
-**Impact**:
-- Token usage: Reduced from ~4.6k to ~2.5k in default context
-- Improved clarity: Clear E2E flow descriptions for current capabilities
-- Accurate documentation: Fixed migration storage claims
-- Future-proof: Easier to maintain as project grows
-
----
-
 ## [2025-12-28] Project Re-Architecture
 
 ### Context
@@ -417,32 +181,6 @@ Initial project concept used n8n as orchestrator and DynamoDB as database. Decis
 
 ---
 
-## [2025-12-31] AuthCallback Session Fix
-
-### Fix: OAuth Callback Infinite Loading
-
-**Problem**: After successful OAuth login, the `/auth/callback` page would show infinite loading until timeout, even though the user was actually logged in.
-
-**Root Cause**: The `onAuthStateChange` listener was set up after the auth state had already changed. By the time the component mounted, Supabase had already processed the OAuth callback.
-
-**Solution**: Check for existing session immediately on component mount, in addition to listening for auth state changes.
-
-**Files Modified**:
-- `frontend/src/pages/AuthCallback.tsx` - Added immediate session check on mount
-
-**Tests Added**:
-- `frontend/src/pages/AuthCallback.test.tsx` - 8 tests covering:
-  - Loading state display
-  - Error param handling from URL
-  - Existing session detection
-  - Auth state change handling
-  - Cleanup on unmount
-  - Back to login navigation
-
-**Test Count**: 50 total (was 42)
-
----
-
 ## [2025-12-29] OAuth UI Improvements
 
 ### Feature: Enhanced OAuth Buttons & Error Handling
@@ -538,6 +276,32 @@ To complete OAuth setup:
 - RLS policies ensure users can only read/write their own ratings
 - Auth check before rating operations
 - Input validated via TypeScript types
+
+---
+
+## [2025-12-31] AuthCallback Session Fix
+
+### Fix: OAuth Callback Infinite Loading
+
+**Problem**: After successful OAuth login, the `/auth/callback` page would show infinite loading until timeout, even though the user was actually logged in.
+
+**Root Cause**: The `onAuthStateChange` listener was set up after the auth state had already changed. By the time the component mounted, Supabase had already processed the OAuth callback.
+
+**Solution**: Check for existing session immediately on component mount, in addition to listening for auth state changes.
+
+**Files Modified**:
+- `frontend/src/pages/AuthCallback.tsx` - Added immediate session check on mount
+
+**Tests Added**:
+- `frontend/src/pages/AuthCallback.test.tsx` - 8 tests covering:
+  - Loading state display
+  - Error param handling from URL
+  - Existing session detection
+  - Auth state change handling
+  - Cleanup on unmount
+  - Back to login navigation
+
+**Test Count**: 50 total (was 42)
 
 ---
 
@@ -1050,6 +814,57 @@ To complete OAuth setup:
 
 ---
 
+## [2026-01-03] Documentation Restructure
+
+### Context
+CLAUDE.md had grown to ~4.6k tokens with mixed concerns (core reference, development guidelines, architecture, roadmap). This caused:
+- High token usage on every conversation
+- Difficulty finding relevant information
+- Outdated/incorrect information (e.g., claiming migrations aren't stored locally when they are)
+- Unclear "what can users do NOW" vs. future plans
+
+### Decision: Split Documentation into Focused Files
+
+**What Changed**:
+- **CLAUDE.md** (new, ~2.5k tokens): Core reference with current E2E flows, quick start, key patterns
+- **docs/DEVELOPMENT_GUIDELINES.md** (new): Mandatory standards, security, testing, code patterns
+- **docs/ROADMAP.md** (new): Current capabilities and future MVPs with clear user flows
+- **docs/ARCHITECTURE.md** (new): Technical details, database schema, RLS policies, deployment
+
+**Rationale**:
+- **Performance**: Load only relevant documentation per task (e.g., only load DEVELOPMENT_GUIDELINES.md when implementing features)
+- **Clarity**: Each file has single responsibility
+- **Accuracy**: Fixed inaccuracies about local migrations and edge functions
+- **Maintainability**: Easier to update specific sections without affecting entire doc
+
+**Specific Fixes in CLAUDE.md**:
+1. **Line 82** (old): "Database migrations and Edge Functions are managed via Supabase Dashboard/MCP, not stored locally."
+   - **Fixed**: "Migrations are version-controlled locally in `supabase/migrations/`. Edge Functions are deployed via Supabase MCP tools and not stored locally."
+
+2. **Line 118** (old): "Database is managed via Supabase Dashboard or MCP tools. No local migration files."
+   - **Fixed**: Clarified local migrations workflow with proper commands
+
+3. **Lines 466-522** (old): Granular checklist of completed tasks mixed with "in progress"
+   - **Fixed**: Replaced with "What Users Can Do Now" section showing 4 working E2E flows and known limitations
+
+**New Structure Benefits**:
+- CLAUDE.md: Always loaded, provides core context and quick reference
+- DEVELOPMENT_GUIDELINES.md: Load when implementing features (security, testing, patterns)
+- ROADMAP.md: Load when planning features or discussing future work
+- ARCHITECTURE.md: Load when making architectural changes or debugging infrastructure
+
+**Migration for AI Agent**:
+- References updated throughout to point to new file locations
+- All content preserved, just reorganized
+
+**Impact**:
+- Token usage: Reduced from ~4.6k to ~2.5k in default context
+- Improved clarity: Clear E2E flow descriptions for current capabilities
+- Accurate documentation: Fixed migration storage claims
+- Future-proof: Easier to maintain as project grows
+
+---
+
 ## [2026-01-03] TopicDetailPage Performance & UI Fixes
 
 ### Bug Fixes: API Call Deduplication and UI Issues
@@ -1089,3 +904,234 @@ To complete OAuth setup:
 
 **Tests**: 96 passing (no changes)
 **Build**: Successful (767KB main bundle)
+
+---
+
+## [2026-01-04] Fix Topic Filter Rendering Issues
+
+### Problem
+When filtering items on topic pages (e.g., anime → 5★ → All), users experienced:
+1. **Items scattering** - grid positions shifting erratically
+2. **Impagination effects** - items repositioning multiple times before settling
+3. **Invisible but clickable items** - DOM elements present but not visible during animations
+
+### Root Cause Analysis
+1. **StaggerContainer with dynamic key prop** (`TopicDetailPage.tsx:476`):
+   ```tsx
+   <StaggerContainer key={`${debouncedSearchQuery}-${activeFilter}-${currentPage}`}>
+   ```
+   - Caused React to completely unmount/remount the entire grid on filter changes
+   - Destroyed all DOM elements and recreated them from scratch
+   - Triggered full animation sequence replay (stagger delays, fade-in, slide-up)
+
+2. **Stagger animations creating invisible states**:
+   - Items animated from `opacity: 0, y: 12` to `opacity: 1, y: 0` over 0.3s
+   - During animation, items were invisible (`opacity: 0`) but still in DOM (clickable)
+   - Stagger delay (0.05s per item) created sequential "impagination" effect
+
+3. **Multiple useEffect hooks causing redundant fetches**:
+   - One effect reset page to 1 on filter change
+   - Another effect fetched items on filter/page change
+   - Both fired sequentially, causing double renders
+
+### Solution Implemented
+1. **Removed key prop from grid container**:
+   - Let React reuse existing DOM and update children (items already have unique `item.id` keys)
+   - Prevents full grid remount on filter changes
+
+2. **Replaced StaggerContainer with AnimatePresence**:
+   ```tsx
+   <AnimatePresence mode="popLayout">
+     {items.map(item => (
+       <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   ```
+   - `mode="popLayout"` smoothly repositions items without destroying them
+   - `layout` prop animates position changes automatically
+   - Simpler opacity-only transition (0.2s, no stagger delays)
+   - Proper exit animations for removed items
+
+3. **Kept useEffect hooks separate but simplified**:
+   - First effect: Reset page to 1 when filter/search changes (only depends on those)
+   - Second effect: Fetch items when page/filter/search/topic changes
+   - Accepted potential double fetch on filter change (minor trade-off for code clarity)
+
+### Impact
+- **Visual stability**: Items no longer scatter or reposition multiple times
+- **Performance**: Grid reuses DOM instead of recreating on every filter change
+- **Accessibility**: No invisible clickable elements during transitions
+- **Simpler animations**: Faster, cleaner transitions (0.2s vs 0.3s + stagger delays)
+
+### Files Changed
+- `frontend/src/pages/TopicDetailPage.tsx`:
+  - Added `AnimatePresence` import from framer-motion
+  - Removed `StaggerContainer` and `StaggerItem` imports
+  - Replaced grid container with `AnimatePresence` + `motion.div` with `layout` prop
+  - Simplified animation: opacity-only transition with layout animation
+
+### Testing
+- ✅ All tests pass (96 tests)
+- ✅ Build succeeds with no TypeScript errors
+- ✅ Reproduction steps (anime → 5★ → All) should now show smooth transitions
+
+---
+
+## [2026-01-04] Add Skeleton Loading for User Data in ItemCard
+
+### Problem
+When ItemCards loaded on topic pages, they initially showed:
+1. **Empty star rating** (no stars filled)
+2. **Add to watch later button** visible immediately
+
+These UI elements depend on API calls that fetch user ratings and TODO status. During the loading period, users saw incomplete/misleading UI instead of loading indicators.
+
+### Root Cause
+- ItemCards received `initialUserRating={null}` on initial render
+- User data (ratings + TODO status) fetched in batch AFTER items loaded
+- No loading state communicated to ItemCard during this gap
+- Result: Empty stars and TODO button appeared before actual data loaded
+
+### Solution Implemented
+1. **Added `isUserDataLoading` prop to ItemCard**:
+   - New optional boolean prop to indicate user data is loading
+   - Defaults to `false` for backwards compatibility
+
+2. **Skeleton loading state in ItemCard** (`ItemCard.tsx:275-279`):
+   ```tsx
+   {user && isUserDataLoading ? (
+     <div className="flex items-center justify-between">
+       <Skeleton className="h-5 w-24" />  {/* Star rating skeleton */}
+       <Skeleton className="h-6 w-6 rounded" />  {/* TODO button skeleton */}
+     </div>
+   ) : (
+     /* Actual rating UI */
+   )}
+   ```
+
+3. **Loading state tracking in TopicDetailPage**:
+   - Added `loadingUserData` state
+   - Set to `true` when fetching user ratings/TODO status
+   - Set to `false` when batch fetch completes
+   - Reset to `false` when topic changes
+   - Passed to all ItemCard instances
+
+### Impact
+- **Better UX**: Clear loading indicators instead of empty UI
+- **No misleading states**: Users don't see empty stars before data loads
+- **Consistent pattern**: Uses same Skeleton component as other loading states
+- **Fast perceived performance**: Skeletons indicate active loading
+
+### Files Changed
+- `frontend/src/components/ItemCard.tsx`:
+  - Added `isUserDataLoading` prop to interface
+  - Imported Skeleton component
+  - Added conditional skeleton rendering for user data
+  - Updated memo comparison to include new prop
+
+- `frontend/src/pages/TopicDetailPage.tsx`:
+  - Added `loadingUserData` state
+  - Set loading state in `fetchItems` before/after user data fetch
+  - Reset loading state in topic change handler
+  - Passed `isUserDataLoading` to all ItemCard instances
+
+### Testing
+- ✅ All tests pass (96 tests)
+- ✅ Build succeeds with no TypeScript errors
+- ✅ Skeleton displays while user data loads, then shows actual rating/TODO UI
+
+---
+
+## [2026-01-04] Rewrite README.md with Accurate Project State
+
+### Problem
+README.md contained outdated and misleading information:
+1. **False claims**: Stated AI enrichment was working ("AI Creates Missing Items" in How It Works)
+2. **Incorrect project structure**: Said "No local supabase/ folder needed" when migrations ARE version-controlled locally
+3. **Missing critical info**: No mention of current MVP 1 capabilities, limitations, testing coverage, or documentation structure
+4. **Poor developer onboarding**: Minimal quick start, no contributing guidelines, no link to comprehensive docs
+
+### What Changed
+**Complete rewrite of README.md** to align with documentation in `docs/*`:
+
+1. **Accurate current state**:
+   - Added "What You Can Do Now (MVP 1)" section listing working features
+   - Added "Current Limitations" section clarifying AI enrichment is NOT yet implemented
+   - Moved AI enrichment to "The Vision" section (future capability)
+   - Simplified authentication features (removed implementation details like "automatic profile creation")
+
+2. **Corrected technical information**:
+   - Fixed project structure to include `supabase/migrations/` folder
+   - Updated tech stack table to clarify AI is "coming in MVP 2"
+   - Added production URL: https://mytops.io
+
+3. **Simplified documentation structure**:
+   - Added links to all docs/* files (ARCHITECTURE, DEVELOPMENT_GUIDELINES, ROADMAP, CHANGELOG, CLAUDE.md)
+   - Development Guidelines section now only links to full documentation (no inline content)
+   - Removed Database section (details in ARCHITECTURE.md)
+   - Removed Deployment section (details in ARCHITECTURE.md)
+   - Added Testing section highlighting 50+ tests
+   - Added Environment Variables section with security guidance
+
+4. **Better developer experience**:
+   - Expanded Quick Start with prerequisites, setup, testing, building
+   - Added Contributing section pointing to mandatory documentation
+   - Improved structure following standard GitHub README conventions
+   - Added "The Vibe" section capturing brand personality
+   - Kept README focused on essentials, delegating details to docs/*
+
+### Why This Change
+- **Documentation is Law**: README must reflect actual project state (Development Guidelines pillar #3)
+- **False expectations**: Users and contributors were misled about AI capabilities
+- **Poor onboarding**: Developers had minimal guidance on setup, testing, contributing
+- **Information scattered**: Critical info was only in docs/* with no README links
+
+### Breaking Changes
+None - purely documentation update
+
+### Migration
+None required - this is a documentation-only change
+
+---
+
+## [2026-01-05] Complete Image Storage Implementation with Lazy Loading Fix
+
+### Problem
+Topics and items lacked visual imagery. Database had `image_url` fields but no storage infrastructure, no lazy loading optimization, and text-heavy cards needed visual enhancement. Additionally, LazyImage component had a critical bug preventing lazy loading from working.
+
+### What Changed
+
+#### Backend - Supabase Storage
+- Created `topic-images` and `item-images` storage buckets (5MB limit, WebP/JPEG/PNG)
+- Added RLS policies: public read access, service role write access
+- Images uploaded following naming convention: `{slug}.png` for topics, `{topic-slug}/{item-slug}` for items
+
+#### Frontend - LazyImage Bug Fix & Integration
+- **Fixed critical LazyImage bug** (`frontend/src/components/LazyImage.tsx`):
+  - Bug: IntersectionObserver watched `img` element that didn't exist yet (chicken-and-egg problem)
+  - Fix: Observer now watches `container` div which always exists
+  - Result: Lazy loading works correctly, images load when entering viewport
+- Created storage URL helpers (`frontend/src/lib/storage.ts`)
+- Updated **TopicsPage**: LazyImage in absolute-positioned wrapper, refined gradient (`via-background/40`)
+- Redesigned **ItemCard**: Background image approach with h-64 cards, gradient overlay, content at bottom
+- Updated **ItemDetailModal**: LazyImage hero section (h-56 md:h-72)
+
+#### Testing
+- Added IntersectionObserver mock to test setup (`frontend/src/test/setup.ts`)
+- Updated ItemCard tests for LazyImage behavior
+- All 96 tests passing
+
+### Technical Decisions
+
+**LazyImage Bug Root Cause**: Component had chicken-and-egg problem where IntersectionObserver tried to observe an `<img>` element that only renders after observer triggers. Fixed by observing the container div instead.
+
+**Test Mocking**: Added proper IntersectionObserver mock in test setup rather than adding fallbacks in component code, following best practices for test isolation.
+
+**Background Image Design**: Modern card aesthetic with gradient overlays ensuring text readability, matching contemporary UI patterns.
+
+### Verification
+- ✅ Lazy loading works correctly (IntersectionObserver fixed)
+- ✅ Images load when entering viewport (50px rootMargin)
+- ✅ All 96 tests passing
+- ✅ Storage buckets and RLS policies verified
+- ✅ No console errors or warnings
+
+---

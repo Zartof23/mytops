@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Plus, Check } from 'lucide-react'
+import { LazyImage } from './LazyImage'
 
 const NEW_RELEASE_DAYS = 30
 
@@ -226,115 +227,126 @@ const ItemCardComponent = ({
   }, [isInTodo, onRemoveFromTodo, onAddToTodo])
 
   const cardContent = (
-    <div className="relative">
-      {/* "New" badge - positioned on image or top corner */}
-      {isNew && (
-        <Badge
-          variant="default"
-          className="absolute top-2 right-2 z-10 text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground"
-        >
-          New
-        </Badge>
-      )}
-
-      {imageUrl && (
-        <img
+    <div className="relative h-64 overflow-hidden rounded-lg group">
+      {/* Background Image */}
+      {imageUrl ? (
+        <LazyImage
           src={imageUrl}
           alt={item.name}
-          className="w-full h-32 object-cover rounded-md mb-3"
-          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          aspectRatio="auto"
         />
+      ) : (
+        <div className="absolute inset-0 bg-muted/30 flex items-center justify-center">
+          <span className="text-6xl opacity-20">{item.topic?.icon || '📦'}</span>
+        </div>
       )}
 
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold line-clamp-1 text-sm">{item.name}</h3>
-        <div className="flex items-center gap-1 shrink-0">
-          {badge && (
-            <Badge variant={badge.variant} className="text-[10px] px-1.5 py-0">
-              {badge.label}
-            </Badge>
-          )}
-        </div>
+      {/* Gradient overlay for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+
+      {/* Badges - positioned at top */}
+      <div className="absolute top-2 right-2 z-10 flex gap-1">
+        {isNew && (
+          <Badge
+            variant="default"
+            className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground"
+          >
+            New
+          </Badge>
+        )}
+        {badge && (
+          <Badge variant={badge.variant} className="text-[10px] px-1.5 py-0">
+            {badge.label}
+          </Badge>
+        )}
       </div>
 
-      {item.description && (
-        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-          {item.description}
-        </p>
-      )}
+      {/* Content positioned at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 z-10 p-4 space-y-2">
+        <h3 className="font-semibold text-base line-clamp-2 drop-shadow-md">
+          {item.name}
+        </h3>
 
-      {showRating && (
-        <>
-          <Separator className="my-3" />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="space-y-2"
-          >
-            {/* Show skeleton while loading user data */}
-            {user && isUserDataLoading ? (
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-5 w-24" />
-                <Skeleton className="h-6 w-6 rounded" />
-              </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <StarRating
-                  value={userRating}
-                  onChange={user ? handleRatingChange : undefined}
-                  disabled={isLoading}
-                  size="sm"
-                  readOnly={!user}
-                />
-                {/* TODO list button - show if user is logged in and hasn't rated */}
-                {user && !userRating && onAddToTodo && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={isInTodo ? 'secondary' : 'ghost'}
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={handleTodoClick}
-                      >
-                        {isInTodo ? (
-                          <Check className="h-3 w-3" />
-                        ) : (
-                          <Plus className="h-3 w-3" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      <p className="text-xs">
-                        {isInTodo ? 'Remove from list' : 'Add to watch later'}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {!user && (
+        {item.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2 drop-shadow">
+            {item.description}
+          </p>
+        )}
+
+        {showRating && (
+          <>
+            <Separator className="bg-border/50" />
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="space-y-2"
+            >
+              {/* Show skeleton while loading user data */}
+              {user && isUserDataLoading ? (
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-6 w-6 rounded" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <StarRating
+                    value={userRating}
+                    onChange={user ? handleRatingChange : undefined}
+                    disabled={isLoading}
+                    size="sm"
+                    readOnly={!user}
+                  />
+                  {/* TODO list button - show if user is logged in and hasn't rated */}
+                  {user && !userRating && onAddToTodo && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={isInTodo ? 'secondary' : 'ghost'}
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={handleTodoClick}
+                        >
+                          {isInTodo ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            <Plus className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p className="text-xs">
+                          {isInTodo ? 'Remove from list' : 'Add to watch later'}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {!user && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Sign in to rate
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Community stats */}
+              {showCommunityStats && (
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    value={avgRating!}
+                    readOnly
+                    size="xs"
+                    className="opacity-60"
+                  />
                   <p className="text-[10px] text-muted-foreground">
-                    Sign in to rate
+                    {avgRating!.toFixed(1)} ({ratingCount})
                   </p>
-                )}
-              </div>
-            )}
-
-            {/* Community stats - now using StarRating instead of Progress */}
-            {showCommunityStats && (
-              <div className="flex items-center gap-2">
-                <StarRating
-                  value={avgRating!}
-                  readOnly
-                  size="xs"
-                  className="opacity-60"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  {avgRating!.toFixed(1)} ({ratingCount})
-                </p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 
@@ -352,7 +364,7 @@ const ItemCardComponent = ({
         <Card
           onClick={handleCardClick}
           className={cn(
-            'p-4 h-full transition-shadow duration-200 overflow-hidden',
+            'p-0 h-full transition-shadow duration-200 overflow-hidden',
             onClick && 'cursor-pointer',
             'hover:shadow-lg hover:shadow-primary/5'
           )}
@@ -371,8 +383,8 @@ const ItemCardComponent = ({
     <Card
       onClick={handleCardClick}
       className={cn(
-        'p-4 h-full hover:bg-accent/50 transition-colors',
-        onClick && 'cursor-pointer'
+        'p-0 h-full overflow-hidden transition-colors',
+        onClick && 'cursor-pointer hover:bg-accent/5'
       )}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}

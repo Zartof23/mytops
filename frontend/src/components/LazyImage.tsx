@@ -57,14 +57,14 @@ const LazyImageComponent = ({
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [shouldLoad, setShouldLoad] = useState(loading === 'eager')
-  const imgRef = useRef<HTMLImageElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // If eager loading or already decided to load, skip observer
     if (loading === 'eager' || shouldLoad) return
 
-    const imgElement = imgRef.current
-    if (!imgElement) return
+    const container = containerRef.current
+    if (!container) return
 
     // Use IntersectionObserver for precise control over when to start loading
     const observer = new IntersectionObserver(
@@ -81,7 +81,7 @@ const LazyImageComponent = ({
       }
     )
 
-    observer.observe(imgElement)
+    observer.observe(container)
 
     return () => {
       observer.disconnect()
@@ -101,7 +101,7 @@ const LazyImageComponent = ({
   const aspectRatioClass = aspectRatio !== 'auto' ? ASPECT_RATIOS[aspectRatio] : ''
 
   return (
-    <div className={cn('relative overflow-hidden', aspectRatioClass, className)}>
+    <div ref={containerRef} className={cn('relative overflow-hidden', aspectRatioClass, className)}>
       {/* Placeholder */}
       {!isLoaded && !hasError && (
         <div
@@ -116,7 +116,6 @@ const LazyImageComponent = ({
       {/* Actual Image */}
       {shouldLoad && !hasError && (
         <img
-          ref={imgRef}
           src={src}
           alt={alt}
           loading={loading}
@@ -124,8 +123,7 @@ const LazyImageComponent = ({
           onError={handleError}
           className={cn(
             'w-full h-full object-cover transition-opacity duration-300',
-            isLoaded ? 'opacity-100' : 'opacity-0',
-            className
+            isLoaded ? 'opacity-100' : 'opacity-0'
           )}
         />
       )}
