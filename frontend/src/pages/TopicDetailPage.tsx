@@ -9,6 +9,7 @@ import { ratingService } from '../services/ratingService'
 import { useAuthStore } from '../store/authStore'
 import { ItemCard } from '../components/ItemCard'
 import { ItemDetailModal } from '../components/ItemDetailModal'
+import { EnrichmentPrompt } from '../components/EnrichmentPrompt'
 import { Pagination } from '../components/Pagination'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -19,7 +20,7 @@ import { SEO } from '@/components/SEO'
 import { PageTransition } from '@/components/PageTransition'
 import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Topic, ItemWithStats } from '@/types'
+import type { Topic, Item, ItemWithStats } from '@/types'
 
 // Witty taglines for each topic
 const TOPIC_TAGLINES: Record<string, string> = {
@@ -42,6 +43,12 @@ interface FilterParams {
   releasedAfter?: Date
 }
 
+interface EmptyStateConfig {
+  showEnrichment: boolean
+  primaryMessage: string
+  secondaryMessage: string | React.ReactNode
+}
+
 /**
  * Map filter options to database query parameters.
  */
@@ -55,6 +62,90 @@ function getFilterParams(filter: FilterOption): FilterParams {
       return { releasedAfter: new Date(Date.now() - NEW_RELEASE_DAYS * 24 * 60 * 60 * 1000) }
     default:
       return {}
+  }
+}
+
+/**
+ * Determine if enrichment prompt should be shown based on search state.
+ *
+ * Enrichment requires:
+ * - Active search query (debounced)
+ * - Authenticated user
+ * - No active filters (enrichment only works for search)
+ * - Search completed (not currently loading)
+ */
+function shouldShowEnrichment(
+  debouncedSearchQuery: string,
+  isAuthenticated: boolean,
+  activeFilter: FilterOption,
+  searching: boolean
+): boolean {
+  return Boolean(debouncedSearchQuery && isAuthenticated && activeFilter === 'all' && !searching)
+}
+
+/**
+ * Get empty state configuration based on current search/filter state.
+ *
+ * Returns appropriate messaging for different scenarios:
+ * - Search with results pending
+ * - Search requiring authentication
+ * - Search with filters active
+ * - No search or filters
+ */
+function getEmptyStateConfig(
+  debouncedSearchQuery: string,
+  isAuthenticated: boolean,
+  activeFilter: FilterOption,
+  searching: boolean
+): EmptyStateConfig {
+  const showEnrichment = shouldShowEnrichment(debouncedSearchQuery, isAuthenticated, activeFilter, searching)
+
+  // Has search query
+  if (debouncedSearchQuery) {
+    // Not authenticated - prompt to log in
+    if (!isAuthenticated) {
+      return {
+        showEnrichment: false,
+        primaryMessage: `No results for "${debouncedSearchQuery}"`,
+        secondaryMessage: (
+          <>
+            <Link to="/login" className="underline">Log in</Link> to search the web for this item.
+          </>
+        )
+      }
+    }
+
+    // Active filters - can't enrich with filters
+    if (activeFilter !== 'all') {
+      return {
+        showEnrichment: false,
+        primaryMessage: `No results for "${debouncedSearchQuery}"`,
+        secondaryMessage: 'AI search only works without filters. Try removing filters first.'
+      }
+    }
+
+    // Authenticated + no filters - show enrichment or default
+    return {
+      showEnrichment,
+      primaryMessage: `No results for "${debouncedSearchQuery}"`,
+      secondaryMessage: "Try a different search. I promise I'm looking."
+    }
+  }
+
+  // No search query - just filters or default
+  if (activeFilter !== 'all') {
+    return {
+      showEnrichment: false,
+      primaryMessage: 'No items match this filter.',
+      secondaryMessage: 'Try removing filters or search for something new.'
+    }
+  }
+
+  // Default empty state
+  return {
+    showEnrichment: false,
+    primaryMessage: 'No items yet. Be the first to search for something.',
+    secondaryMessage: 'The database grows with every search. In theory.'
   }
 }
 
@@ -360,6 +451,24 @@ export function TopicDetailPage() {
     }
   }, [])
 
+  const handleEnrichmentComplete = useCallback((item: Item) => {
+    // Convert Item to ItemWithStats by adding stats fields
+    const itemWithStats: ItemWithStats = {
+      ...item,
+      avg_rating: 0,
+      rating_count: 0
+    }
+
+    // Add newly enriched item to list
+    setItems([itemWithStats])
+    setTotalCount(1)
+    toast.success('Found it! Added to the database.')
+  }, [])
+
+  const handleEnrichmentCancel = useCallback(() => {
+    setSearchQuery('')
+  }, [])
+
   // Loading state
   if (loading) {
     return (
@@ -529,22 +638,40 @@ export function TopicDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
           >
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground mb-2 text-sm">
-                {searchQuery
-                  ? `No results for "${searchQuery}"`
-                  : activeFilter !== 'all'
-                    ? 'No items match this filter.'
-                    : 'No items yet. Be the first to search for something.'}
-              </p>
-              <p className="text-xs text-muted-foreground italic">
-                {searchQuery
-                  ? "Try a different search. I promise I'm looking."
-                  : activeFilter !== 'all'
-                    ? 'Try removing filters or search for something new.'
-                    : 'The database grows with every search. In theory.'}
-              </p>
-            </Card>
+            {(() => {
+              const emptyStateConfig = getEmptyStateConfig(
+                debouncedSearchQuery,
+                !!user,
+                activeFilter,
+                searching
+              )
+
+              // Show AI enrichment prompt when conditions met
+              if (emptyStateConfig.showEnrichment) {
+                return (
+                  <EnrichmentPrompt
+                    searchQuery={debouncedSearchQuery}
+                    topicSlug={topic.slug}
+                    topicId={topic.id}
+                    topicName={topic.name}
+                    onEnrichmentComplete={handleEnrichmentComplete}
+                    onCancel={handleEnrichmentCancel}
+                  />
+                )
+              }
+
+              // Show standard empty state
+              return (
+                <Card className="p-8 text-center">
+                  <p className="text-muted-foreground mb-2 text-sm">
+                    {emptyStateConfig.primaryMessage}
+                  </p>
+                  <p className="text-xs text-muted-foreground italic">
+                    {emptyStateConfig.secondaryMessage}
+                  </p>
+                </Card>
+              )
+            })()}
           </motion.div>
         )}
       </div>
