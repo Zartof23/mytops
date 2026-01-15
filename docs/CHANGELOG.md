@@ -1,449 +1,259 @@
 # Changelog
 
-All notable decisions and changes to this project will be documented in this file.
+All notable decisions and changes to this project are documented in this file.
 
-New entries are added at the bottom of the file (most recent last).
-
----
-
-## [2025-12-28] Project Re-Architecture
-
-### Context
-Initial project concept used n8n as orchestrator and DynamoDB as database. Decision made to start fresh with a simpler, more integrated stack.
-
-### Decisions Made
-
-#### Backend Platform: Supabase
-**Decision**: Use Supabase as unified backend (PostgreSQL + Auth + Edge Functions)
-
-**Rationale**:
-- All-in-one platform reduces complexity
-- Built-in Row Level Security for data protection
-- Native PostgreSQL with real-time subscriptions
-- Edge Functions for serverless backend logic
-- Integrated authentication with OAuth support
-- MCP integration available for development
-
-**Alternatives Considered**:
-- n8n + DynamoDB (original) - Too complex for MVP, DynamoDB single-table design adds cognitive overhead
-- Firebase - Less SQL-friendly, vendor lock-in concerns
-- Self-hosted PostgreSQL + separate auth - More infrastructure to manage
+> **Archive Policy**: Entries older than 3 months move to `changelogs/YYYY-QX.md`
+>
+> **Format**: Each entry includes What, Why, Impact, and Files Changed
 
 ---
 
-#### Frontend Styling: Tailwind CSS + shadcn/ui
-**Decision**: Use Tailwind CSS with shadcn/ui components
+## Archives
 
-**Rationale**:
-- Tailwind provides utility-first styling, fast iteration
-- shadcn/ui is not a dependency - components are copied into project
-- Built on Radix UI for accessibility
-- Minimal aesthetic fits project personality
-- Built-in dark/light mode support
-
-**Alternatives Considered**:
-- Material UI - Too opinionated, heavier bundle
-- Chakra UI - Good but adds dependency
-- Plain CSS - Too slow for rapid development
+- [2025 Q4](changelogs/2025-Q4.md) - Project foundation, architecture decisions, MVP 1
 
 ---
 
-#### Authentication: Email + Google + GitHub
-**Decision**: Support email/password registration plus Google and GitHub OAuth
+## 2026
 
-**Rationale**:
-- Email/password for users who prefer direct accounts
-- Google covers majority of casual users
-- GitHub appeals to developer audience (fits brand)
-- Easy to add more providers later via Supabase
+### [2026-01-15] Skills Restructure with Context Integration
 
----
+**What**: Updated and created skills to use the new context file structure.
 
-#### AI Provider: Claude (Anthropic)
-**Decision**: Use Claude API for item enrichment
+**Changes**:
+- **react-specialist**: Slimmed down from 629 to 267 lines, now references `FRONTEND_CONTEXT.md` and `TESTING_CONTEXT.md`
+- **backend-specialist** (NEW): Supabase backend development including database design, RLS policies, Edge Functions, migrations. References `BACKEND_CONTEXT.md`
+- **seo-optimization** (NEW): SEO and web performance optimization including meta tags, structured data, Core Web Vitals, accessibility. References `DEPLOYMENT_CONTEXT.md`
 
-**Rationale**:
-- Excellent at structured data extraction
-- Consistent JSON output for database insertion
-- Good context understanding for varied topics
+**Impact**: Documentation, Developer Experience
+**Files**: `.claude/skills/*/SKILL.md`
 
 ---
 
-#### Rating System: 5 Stars
-**Decision**: Standard 1-5 star rating
+### [2026-01-14] Documentation Restructure for Task-Specific Context
 
-**Rationale**:
-- Universally understood
-- Simple to implement
-- Good granularity without being overwhelming
+**What**: Restructured documentation into task-specific context files for efficient AI assistance.
 
----
+**Why**:
+- Original CLAUDE.md was a monolithic file (~2.6k tokens) loaded on every conversation
+- No way to load only relevant context for specific task types
+- Documentation updates required editing multiple sections
 
-#### Profile Organization: By Topic
-**Decision**: User preferables displayed organized by topic
+**Changes**:
+- Created `docs/context/` directory with 4 task-specific files:
+  - `BACKEND_CONTEXT.md` - Database, RLS, Edge Functions, migrations
+  - `FRONTEND_CONTEXT.md` - React, components, state, styling
+  - `TESTING_CONTEXT.md` - Test patterns, mocks, coverage
+  - `DEPLOYMENT_CONTEXT.md` - CI/CD, production, monitoring
+- Slimmed CLAUDE.md to router format (~800 tokens)
+- Created `docs/changelogs/` for archived entries
+- Archived 2025 entries to `changelogs/2025-Q4.md`
 
-**Rationale**:
-- Clear structure for MVP
-- Easy to navigate
-- Can add unified view later
-
----
-
-#### UI Personality: Self-Deprecating Developer Humor
-**Decision**: Brand voice as "backend developer who reluctantly built a frontend"
-
-**Rationale**:
-- Unique and memorable
-- Sets honest, no-BS expectations
-- Appeals to developer audience
-- Makes minimal design a feature, not a bug
-
-**Example Copy**:
-- "I'm a backend dev... I don't usually do frontend."
-- "Yes, the registration form is just those fields. I don't need your data."
-- "Something broke. Honestly, I'm surprised it worked this long."
+**Impact**: Backend, Frontend, Documentation
+**Files**: CLAUDE.md, docs/context/*.md, docs/changelogs/2025-Q4.md
 
 ---
 
-#### Initial Topics
-**Decision**: Seed with 6 topics for MVP
+### [2026-01-13] Bug Fix: Edge Function 401 Authentication Error
 
-| Topic | Slug | Icon |
-|-------|------|------|
-| Movies | movies | 🎬 |
-| Series | series | 📺 |
-| Books | books | 📚 |
-| Anime | anime | 🎌 |
-| Games | games | 🎮 |
-| Restaurants | restaurants | 🍽️ |
+**What**: Fixed authentication error preventing AI enrichment from working.
 
-**Rationale**:
-- Covers common "favorites" categories
-- Mix of entertainment and real-world
-- Easy to add more later
+**Why**: Edge function was deployed with `verify_jwt: true`, causing Supabase to reject requests before function code could handle authentication.
+
+**Solution**: Redeployed with `verify_jwt: false`. Function has comprehensive manual auth handling.
+
+**Impact**: Backend (Edge Functions)
+**Files**: ai-enrich-item edge function (version 4)
 
 ---
 
-## [2025-12-29] Item Search Feature
+### [2026-01-11] MVP 2: AI-Powered Database Enrichment
 
-### Feature: TopicDetailPage with Item Search
+**What**: Implemented the core "self-building database" feature. When users search for items that don't exist, the system offers to search the web, extract structured data using Claude AI, and automatically add enriched items to the database.
 
-**What**: New page at `/topics/:slug` displaying topic details and allowing users to search for items within that topic.
+**Why**: Core innovation of mytops - database grows organically as users search.
 
+**How It Works**:
+1. User searches for non-existent item
+2. System offers "Search the Web" button
+3. Claude API with tool_use calls Tavily web search
+4. AI extracts structured, topic-specific metadata
+5. System downloads and stores poster/cover image
+6. Enriched item inserted into database
+
+**Security & Abuse Prevention**:
+- Authentication: Valid JWT required
+- Rate Limiting: 5 requests/user/day
+- Input Validation: 200 char max, topic validation
+- Confidence Scoring: ≥0.8 auto-approve, 0.6-0.8 flagged, <0.6 rejected
+
+**Impact**: Backend, Frontend, Database
 **Files Created**:
-- `frontend/src/pages/TopicDetailPage.tsx` - Main page component
-- `frontend/src/components/ItemCard.tsx` - Reusable item card component
+- Database migrations for app_config, user_enrichment_requests, rate limiting
+- Edge function `ai-enrich-item`
+- frontend/src/services/enrichmentService.ts
+- frontend/src/hooks/useEnrichment.ts
+- frontend/src/components/EnrichmentPrompt.tsx
 
-**Files Modified**:
-- `frontend/src/App.tsx` - Added route for `/topics/:slug`
-
-**Implementation Details**:
-- Topic header shows icon, name, and description
-- Search input filters items by name (case-insensitive via Supabase `.ilike()`)
-- Items displayed in responsive grid (2 cols mobile, 3 cols desktop)
-- ItemCard shows name, truncated description, optional image, and source badge
-- Source badges: Curated (blue), AI (purple), User (green)
-- Empty states with personality copy
-- Accessible: keyboard navigation on cards, screen reader labels
-
-**Security**:
-- RLS policies handle access control (public read for items/topics)
-- Search queries use Supabase parameterized queries (no SQL injection risk)
-
-**Next Steps**:
-- Rating component to add items to user's preferables
-- AI enrichment when search returns no results
+**Test Count**: 119 (was 96, +23 new tests)
 
 ---
 
-## [2025-12-29] Search Debouncing Optimization
+### [2026-01-05] SEO & Performance Optimization
 
-### Optimization: Debounced Search Input
+**What**: Comprehensive SEO infrastructure and performance optimizations.
 
-**Problem**: Every keystroke triggered a Supabase API call, causing unnecessary load and potential rate limiting.
+**Why**: Application lacked basic SEO infrastructure, no build-time compression, missing accessibility labels.
 
-**Solution**: Implemented debouncing - delays API call until 300ms after user stops typing.
+**Changes**:
+- Added robots.txt, sitemap.xml, site.webmanifest
+- Added Open Graph and Twitter Card meta tags
+- Build-time gzip/brotli compression
+- Route-level code splitting for auth and detail pages
+- LazyImage enhancements for CLS optimization
+- Accessibility improvements (aria-labels, live regions)
+- Structured data schemas (BreadcrumbList, CollectionPage)
 
-**Files Created**:
-- `frontend/src/lib/hooks.ts` - `useDebouncedValue` custom hook
-
-**Files Modified**:
-- `frontend/src/pages/TopicDetailPage.tsx` - Uses debounced search query
-
-**Implementation Details**:
-- `useDebouncedValue<T>(value, delay)` hook using `useEffect` + `setTimeout`
-- Cleanup function cancels pending timers on each keystroke
-- 300ms delay (standard for search inputs)
-- Visual "Searching..." indicator while query is pending
-- Input remains responsive (controlled), only API call is debounced
-
-**References**:
-- [React Debounce Best Practices](https://www.developerway.com/posts/debouncing-in-react)
-- [OpenReplay Debounce Strategies](https://blog.openreplay.com/optimizing-api-calls-react-debounce-strategies/)
+**Impact**: Frontend, SEO, Accessibility
+**Test Count**: 101 (was 96, +5 new tests)
 
 ---
 
-## [2025-12-29] OAuth UI Improvements
+### [2026-01-05] Complete Image Storage Implementation
 
-### Feature: Enhanced OAuth Buttons & Error Handling
+**What**: Topics and items now have visual imagery with lazy loading.
 
-**What**: Improved OAuth login experience with provider icons, loading states, and error handling.
+**Why**: Database had image_url fields but no storage infrastructure.
 
-**Files Modified**:
-- `frontend/src/store/authStore.ts` - Added `oauthLoading` state to track which provider is loading
-- `frontend/src/pages/LoginPage.tsx` - Added Google/GitHub SVG icons, loading spinners, disabled states
-- `frontend/src/pages/RegisterPage.tsx` - Same OAuth button improvements
-- `frontend/src/pages/AuthCallback.tsx` - Added error handling, loading spinner, timeout fallback
+**Changes**:
+- Created `topic-images` and `item-images` storage buckets
+- Fixed critical LazyImage bug (IntersectionObserver watched wrong element)
+- Updated TopicsPage, ItemCard, ItemDetailModal with images
+- Background image design with gradient overlays
 
-**Implementation Details**:
-
-**OAuth Button Improvements**:
-- Inline SVG icons for Google (colored) and GitHub (monochrome)
-- Loading spinner (Loader2) when OAuth redirect is in progress
-- Buttons disabled during any auth operation
-- Visual feedback for disabled state
-
-**AuthCallback Enhancements**:
-- Parses `error` and `error_description` from URL params
-- Shows error state with "Back to login" button
-- Loading spinner animation during callback processing
-- 10-second timeout fallback if auth hangs
-- Proper cleanup of auth listener subscription
-
-**OAuth Provider Setup (User Action)**:
-To complete OAuth setup:
-1. Create OAuth apps in Google Cloud Console and GitHub Developer Settings
-2. Set redirect URI: `https://ocasihbuejfjirsrnxzq.supabase.co/auth/v1/callback`
-3. Enable providers in Supabase Dashboard > Authentication > Providers
+**Impact**: Backend (Storage), Frontend (Components)
 
 ---
 
-## [2025-12-29] Rating Component & Testing Infrastructure
+### [2026-01-04] Add Skeleton Loading for User Data in ItemCard
 
-### Feature: StarRating Component with Testing
+**What**: Added loading skeletons when fetching user ratings and TODO status.
 
-**What**: Interactive 5-star rating component with full testing infrastructure.
+**Why**: ItemCards showed empty stars and TODO buttons before data loaded, creating misleading UI.
 
-**Files Created**:
-- `frontend/vitest.config.ts` - Vitest configuration
-- `frontend/src/test/setup.ts` - Test setup with global mocks
-- `frontend/src/test/utils.tsx` - Custom render with providers
-- `frontend/src/services/ratingService.ts` - Rating CRUD operations
-- `frontend/src/services/ratingService.test.ts` - Service unit tests
-- `frontend/src/components/StarRating.tsx` - Star rating component
-- `frontend/src/components/StarRating.test.tsx` - Component tests
-- `frontend/src/components/ItemCard.test.tsx` - ItemCard integration tests
+**Solution**: Added `isUserDataLoading` prop to ItemCard with skeleton placeholders.
 
-**Files Modified**:
-- `frontend/package.json` - Added test scripts and dependencies
-- `frontend/tsconfig.app.json` - Added vitest/globals types
-- `frontend/src/components/ItemCard.tsx` - Integrated rating functionality
-- `frontend/src/pages/ProfilePage.tsx` - Uses StarRating component
-
-**Database Migration**:
-- `seed_test_items` - Seeded 20 items across 5 topics (Movies, Series, Books, Anime, Games)
-
-**Implementation Details**:
-
-**StarRating Component**:
-- 5 clickable star buttons using lucide-react Star icon
-- Hover preview effect (shows what rating would be)
-- Yellow fill for rated stars, muted for unrated
-- Size variants: sm, md, lg
-- Disabled/readOnly states
-- Full keyboard accessibility (Enter/Space to select)
-- ARIA labels for screen readers
-
-**ItemCard Rating Integration**:
-- Fetches user's existing rating on mount
-- Optimistic update on rating change (immediate UI feedback)
-- Rollback on error
-- stopPropagation to prevent card click when rating
-- "Sign in to rate" prompt for unauthenticated users
-
-**ratingService**:
-- `upsertRating(input)` - Create/update rating (handles UNIQUE constraint)
-- `getUserRating(itemId)` - Get user's rating for an item
-- `deleteRating(itemId)` - Remove rating
-
-**Testing Infrastructure**:
-- Vitest with jsdom environment
-- React Testing Library for component tests
-- @testing-library/user-event for interaction simulation
-- Custom render wrapper with BrowserRouter
-- Global test setup with Supabase mocks
-- 42 tests total (8 service + 18 StarRating + 16 ItemCard)
-
-**Security**:
-- RLS policies ensure users can only read/write their own ratings
-- Auth check before rating operations
-- Input validated via TypeScript types
+**Impact**: Frontend (ItemCard)
 
 ---
 
-## [2025-12-31] AuthCallback Session Fix
+### [2026-01-04] Fix Topic Filter Rendering Issues
 
-### Fix: OAuth Callback Infinite Loading
+**What**: Fixed items scattering and becoming invisible during filter changes.
 
-**Problem**: After successful OAuth login, the `/auth/callback` page would show infinite loading until timeout, even though the user was actually logged in.
+**Why**: StaggerContainer with dynamic key prop caused full grid remount on filter changes.
 
-**Root Cause**: The `onAuthStateChange` listener was set up after the auth state had already changed. By the time the component mounted, Supabase had already processed the OAuth callback.
+**Solution**:
+- Removed key prop from grid container
+- Replaced StaggerContainer with AnimatePresence mode="popLayout"
+- Simpler opacity-only transitions with layout animation
 
-**Solution**: Check for existing session immediately on component mount, in addition to listening for auth state changes.
-
-**Files Modified**:
-- `frontend/src/pages/AuthCallback.tsx` - Added immediate session check on mount
-
-**Tests Added**:
-- `frontend/src/pages/AuthCallback.test.tsx` - 8 tests covering:
-  - Loading state display
-  - Error param handling from URL
-  - Existing session detection
-  - Auth state change handling
-  - Cleanup on unmount
-  - Back to login navigation
-
-**Test Count**: 50 total (was 42)
+**Impact**: Frontend (TopicDetailPage)
 
 ---
 
-## [2025-12-31] UI/UX Rework with shadcn/ui
+### [2026-01-04] Rewrite README.md with Accurate Project State
 
-### Feature: Complete Frontend Design Refresh
+**What**: Complete rewrite of README.md to align with documentation.
 
-**What**: Comprehensive UI/UX overhaul using shadcn/ui components with a monochrome color scheme, maintaining the "backend dev who doesn't do frontend" personality.
+**Why**: README contained false claims (AI enrichment was working), incorrect project structure, missing critical info.
 
-**Design Principles**:
-- Sharp & Minimal: Clean lines, no unnecessary decoration
-- Monochrome: Black, white, and grays only (neutral palette)
-- Dev Vibe: Self-deprecating humor in toast messages and copy
-- Functional: Every element serves a purpose
-
-**Files Created** (shadcn/ui components):
-- `frontend/src/components/ui/button.tsx`
-- `frontend/src/components/ui/card.tsx`
-- `frontend/src/components/ui/input.tsx`
-- `frontend/src/components/ui/badge.tsx`
-- `frontend/src/components/ui/skeleton.tsx`
-- `frontend/src/components/ui/sonner.tsx` (toast notifications)
-- `frontend/src/components/ui/separator.tsx`
-- `frontend/src/components/ui/tooltip.tsx`
-- `frontend/src/components/ui/label.tsx`
-- `frontend/src/lib/utils.ts` (cn utility for class merging)
-- `frontend/components.json` (shadcn configuration)
-
-**Files Modified**:
-- `frontend/src/index.css` - Monochrome CSS variables (HSL-based)
-- `frontend/src/components/Layout.tsx` - shadcn Button, Separator, added Toaster
-- `frontend/src/components/ItemCard.tsx` - Card, Badge, toast notifications
-- `frontend/src/components/StarRating.tsx` - Monochrome stars (fill-foreground instead of yellow)
-- `frontend/src/components/ThemeToggle.tsx` - shadcn Button ghost/icon variant
-- `frontend/src/components/OAuthButtons.tsx` - shadcn Button outline variant
-- `frontend/src/pages/HomePage.tsx` - Card, Button, Separator components
-- `frontend/src/pages/TopicsPage.tsx` - Card, Skeleton loading states
-- `frontend/src/pages/TopicDetailPage.tsx` - Input, Skeleton, Card, Loader2
-- `frontend/src/pages/LoginPage.tsx` - Card wrapper, Input, Label, Button, toast
-- `frontend/src/pages/RegisterPage.tsx` - Card wrapper, Input, Label, Button, toast
-- `frontend/src/pages/ProfilePage.tsx` - Card, Skeleton, Separator
-- `frontend/tsconfig.json` - Path alias for @/ imports
-- `frontend/tsconfig.app.json` - Path alias for @/ imports
-- `frontend/vite.config.ts` - Path alias resolution
-- `frontend/vitest.config.ts` - Path alias for tests
-
-**Configuration Changes**:
-- shadcn style: `new-york` (sharper, more minimal)
-- Base color: `neutral` (monochrome grays)
-- Path alias: `@/` maps to `src/`
-
-**Toast Messages** (with dev humor):
-| Event | Message |
-|-------|---------|
-| Rating saved | "Noted. Your taste is... interesting." |
-| Rating failed | "Couldn't save that. The database is judging you." |
-| Login success | "Welcome back. The database missed you." |
-| Login failed | "Wrong credentials. Or maybe I broke something." |
-| Network error | "Can't reach the server. It's probably my fault." |
-
-**Skeleton Loading States Added**:
-- Topics grid: Placeholder cards during fetch
-- Items grid: Placeholder cards with image areas
-- Profile page: Topic sections with rating placeholders
-
-**Bug Fixes During Implementation**:
-- Removed Next.js-specific `next-themes` dependency from sonner.tsx
-- Replaced with MutationObserver-based theme detection
-- Removed unnecessary `"use client"` directives (Vite doesn't need them)
-- Fixed vitest path alias configuration
-
-**Dependencies Added**:
-- `class-variance-authority` - For component variants
-- `clsx` - Class name utility
-- `tailwind-merge` - Intelligent Tailwind class merging
-- `sonner` - Toast notification library
-- `@radix-ui/*` - Accessible UI primitives (via shadcn)
-
-**Dependencies Removed**:
-- `next-themes` - Not needed for Vite projects
-
-**Test Impact**: All 50 tests pass. One test updated to work with new Separator component structure.
-
-**Build Size**: 496KB (acceptable for full shadcn integration)
+**Impact**: Documentation
 
 ---
 
-## [2025-12-31] Code Quality & Route Guards
+### [2026-01-03] TopicDetailPage Performance & UI Fixes
 
-### Refactor: Route Protection & Code Quality Improvements
+**What**: Fixed duplicate API calls and invisible items on topic pages.
 
-**What**: Comprehensive code quality audit and fixes including proper route guards, shared components, and memory leak fixes.
+**Bugs Fixed**:
+1. Duplicate /topics API calls due to hasFetchedTopic ref reset
+2. Duplicate /user API calls (service fetched user internally)
+3. User rating not displaying after async load
+4. Items invisible (opacity=0) between searches
 
-**Files Created**:
-- `frontend/src/components/RouteGuards.tsx` - ProtectedRoute and PublicOnlyRoute components
-- `frontend/src/components/OAuthButtons.tsx` - Shared OAuth buttons and icons
-- `frontend/src/components/ErrorBoundary.tsx` - Global error boundary with brand voice
-
-**Files Modified**:
-- `frontend/src/App.tsx` - Integrated route guards and auth cleanup
-- `frontend/src/pages/ProfilePage.tsx` - Removed band-aid redirect, fixed `any` types
-- `frontend/src/pages/LoginPage.tsx` - Uses shared OAuth components
-- `frontend/src/pages/RegisterPage.tsx` - Uses shared OAuth components
-- `frontend/src/store/authStore.ts` - Fixed memory leak with subscription cleanup
-- `frontend/src/main.tsx` - Wrapped app with ErrorBoundary
-
-**Implementation Details**:
-
-**Route Guards**:
-- `ProtectedRoute`: Redirects to `/login` if not authenticated
-- `PublicOnlyRoute`: Redirects to `/` if already authenticated (prevents accessing /login when logged in)
-- Uses React Router's `<Outlet />` pattern for nested routing
-- Checks `initialized` state to avoid flash of wrong content
-
-**Shared Components**:
-- Extracted `GoogleIcon` and `GitHubIcon` SVG components
-- Created `OAuthButtons` component with loading states
-- Created `OAuthDivider` component
-- Reduced code duplication between LoginPage and RegisterPage
-
-**Memory Leak Fix**:
-- Auth subscription stored externally to Zustand store
-- `cleanup()` method added to unsubscribe on unmount
-- Prevents duplicate subscriptions on hot reload
-
-**Error Boundary**:
-- Class component catching React errors
-- Brand-appropriate error message: "Something broke. Honestly, I'm surprised it worked this long."
-- Shows error message in monospace font
-- "Try again" button to reset error state
-
-**Test Count**: 50 (unchanged)
+**Impact**: Frontend (TopicDetailPage, ItemCard, statsService)
 
 ---
 
-## [2026-01-01] Complete UX Overhaul
+### [2026-01-03] Documentation Restructure (Original)
 
-### Feature: Intentional Minimalism with Micro-Interactions
+**What**: Split CLAUDE.md into focused documents.
 
-**What**: Comprehensive UX redesign transforming the app from "functional minimal" to "intentional minimal" with purposeful animations, better discovery, and SEO optimization.
+**Why**: CLAUDE.md had grown to ~4.6k tokens with mixed concerns.
+
+**Changes**:
+- CLAUDE.md: Core reference with current E2E flows
+- docs/DEVELOPMENT_GUIDELINES.md: Mandatory standards
+- docs/ROADMAP.md: Future MVPs
+- docs/ARCHITECTURE.md: Technical details
+
+**Impact**: Documentation
+
+---
+
+### [2026-01-02] Modal Integration & Final Wiring
+
+**What**: Connected ItemDetailModal to TopicDetailPage.
+
+**Features**:
+- Clickable item cards open detail modal
+- Rating in modal with optimistic updates
+- TODO list management from modal
+- Pre-fetched data for instant modal display
+
+**Impact**: Frontend (TopicDetailPage)
+
+---
+
+### [2026-01-01] Major Feature Update: Server-Side Filtering, Pagination, TODO Lists
+
+**What**: Server-side filtering with PostgreSQL functions, pagination, and TODO lists.
+
+**Database Changes**:
+- `user_todo_lists` table for per-topic watchlists
+- `get_items_with_stats()` function for server-side filtering
+- `get_user_ratings_for_items()` function for batch rating fetches
+
+**Frontend Changes**:
+- Server-side filtering (All, 5★, 4★+, New)
+- Pagination (24 items/page)
+- TODO service and UI integration
+- Item detail modal with topic-specific metadata
+
+**Impact**: Backend (Database), Frontend (TopicDetailPage, ItemCard)
+
+---
+
+### [2026-01-01] Bug Fixes and Testing Expansion
+
+**What**: Fixed several issues from UX overhaul, added 46 new tests.
+
+**Bugs Fixed**:
+1. StarRating half-star display (fractional ratings)
+2. TopicDetailPage duplicate API calls
+3. TopicDetailPage filter logic (items without ratings)
+4. ProfilePage double fetch
+5. ItemCard duplicate rating fetch
+6. Deprecated React.ElementRef
+
+**Test Count**: 96 (was 50, +46 new tests)
+
+---
+
+### [2026-01-01] Complete UX Overhaul
+
+**What**: Comprehensive UX redesign with Framer Motion animations, public profiles, and SEO.
 
 **Design Philosophy**: "Notion's clarity meets Letterboxd's soul, built by someone who'd rather be writing SQL."
 
@@ -452,1037 +262,11 @@ To complete OAuth setup:
 - Page transitions with fade + slide effects
 - SEO optimization with React 19 native meta tags
 - Public shareable profiles at `/@username`
-- Community stats (avg rating, count) on items
-- Live preview carousel on homepage
+- Community stats on items
 - Filter pills for topic browsing
 
-**Files Created**:
-- `frontend/src/lib/animations.ts` - Animation presets (page transitions, stagger, star pulse)
-- `frontend/src/components/SEO.tsx` - SEO meta tags + structured data (JSON-LD)
-- `frontend/src/components/PageTransition.tsx` - Page transition wrapper components
-- `frontend/src/services/statsService.ts` - Community stats queries (batch, user, popular items)
-- `frontend/src/services/profileService.ts` - Profile queries (by username, update, top rated)
-- `frontend/src/pages/PublicProfilePage.tsx` - SEO-optimized public profile view
-
-**Files Modified**:
-- `frontend/src/App.tsx` - Added /@username route with lazy loading
-- `frontend/src/components/StarRating.tsx` - Framer Motion pulse + glow animations
-- `frontend/src/components/ItemCard.tsx` - Hover lift effect, community stats display, Progress bar
-- `frontend/src/pages/HomePage.tsx` - Live preview carousel, accordion FAQ, new tagline
-- `frontend/src/pages/TopicsPage.tsx` - Stagger animation, hover effects, SEO
-- `frontend/src/pages/TopicDetailPage.tsx` - Filter pills, search feedback, witty taglines, SEO
-- `frontend/src/pages/ProfilePage.tsx` - Stats grid, top rated carousel, tabbed navigation
-
-**New shadcn/ui Components Added**:
-- `tabs.tsx` - Tabbed navigation for profile
-- `dialog.tsx` - Modal dialogs
-- `avatar.tsx` - User avatar with fallback
-- `progress.tsx` - Rating progress bar
-- `scroll-area.tsx` - Horizontal scroll for top rated
-- `accordion.tsx` - FAQ on homepage
-- `dropdown-menu.tsx` - Future use
-
-**Animation Details**:
-- StarRating: Subtle pulse (1.15x scale, 150ms) + glow effect on click
-- ItemCard: Hover lift (-2px translateY) + shadow increase
-- Pages: Fade + slide up (200ms ease-out)
-- Grids: Stagger children (50ms delay each)
-- Stats: Count up animation (1s duration)
-- All animations respect `prefers-reduced-motion`
-
-**SEO Implementation**:
-- React 19 native Document Metadata (no external library needed)
-- Open Graph tags for social sharing
-- Twitter Card support
-- Structured data: WebSite, Person, ItemList schemas
-- Dynamic meta titles per page type
-- Canonical URLs
-
-**Topic Taglines**:
-| Topic | Tagline |
-|-------|---------|
-| Movies | "Every masterpiece. Every guilty pleasure." |
-| Series | "The ones you binged. The ones you pretend you didn't." |
-| Books | "The ones you finished. The ones collecting dust." |
-| Anime | "Your gateway into degeneracy. Own it." |
-| Games | "Hundreds of hours well spent. Arguably." |
-| Restaurants | "The spots you'd actually recommend." |
-
-**Dependencies Added**:
-- `framer-motion` (v12.x) - Animation library
-- `@radix-ui/react-tabs` - Tabs primitive
-- `@radix-ui/react-dialog` - Dialog primitive
-- `@radix-ui/react-avatar` - Avatar primitive
-- `@radix-ui/react-progress` - Progress primitive
-- `@radix-ui/react-scroll-area` - Scroll area primitive
-- `@radix-ui/react-accordion` - Accordion primitive
-- `@radix-ui/react-dropdown-menu` - Dropdown primitive
-
-**Test Count**: 50 (all passing)
-
-**Build Size**: 680KB (increased due to Framer Motion, but code-split for lazy loading)
+**Build Size**: 680KB (increased due to Framer Motion)
 
 ---
 
-## [2026-01-01] Bug Fixes and Testing Expansion
-
-### Bug Fixes
-
-**What**: Fixed several issues identified during UX overhaul review.
-
-**Files Modified**:
-- `frontend/src/components/StarRating.tsx` - Fixed fractional rating display
-- `frontend/src/pages/TopicDetailPage.tsx` - Fixed duplicate API calls and filter logic
-- `frontend/src/pages/ProfilePage.tsx` - Fixed duplicate API call on activeTab change
-- `frontend/src/components/ItemCard.tsx` - Fixed duplicate rating fetch
-- Multiple `frontend/src/components/ui/*.tsx` files - Fixed deprecated React.ElementRef
-
-**Files Created**:
-- `frontend/src/services/statsService.test.ts` - 10 tests for stats service
-- `frontend/src/services/profileService.test.ts` - 11 tests for profile service
-- `frontend/src/components/SEO.test.tsx` - 13 tests for SEO components
-- `frontend/src/components/PageTransition.test.tsx` - 12 tests for animation wrappers
-
-**Bug Details**:
-
-**1. StarRating Half-Star Display** (`StarRating.tsx:39-48, 179-191`)
-- **Issue**: Fractional ratings (e.g., 4.3) didn't visually show partial star fill
-- **Fix**: Added `getStarFillPercent()` function and CSS clip-path overlay
-- **How**: Uses `clipPath: inset(0 ${100 - fillPercent}% 0 0)` for partial star display
-
-**2. TopicDetailPage Duplicate API Calls** (`TopicDetailPage.tsx:58-59, 68-73`)
-- **Issue**: Search API called multiple times unnecessarily
-- **Fix**: Added `lastFetchedQuery` ref to track and skip duplicate fetches
-- **How**: `if (lastFetchedQuery.current === query) return`
-
-**3. TopicDetailPage Filter Logic** (`TopicDetailPage.tsx:177-182`)
-- **Issue**: Filters showed items without ratings as matching "5★" or "4★+"
-- **Fix**: Added `stats.ratingCount > 0` check to all rating-based filters
-- **How**: `return stats && stats.ratingCount > 0 && stats.avgRating >= 4.8`
-
-**4. ProfilePage Double Fetch** (`ProfilePage.tsx:181`)
-- **Issue**: `activeTab` in dependencies caused refetch when tab was set
-- **Fix**: Removed `activeTab` from useEffect dependencies
-- **How**: Use functional setState: `setActiveTab((prev) => prev || ...)`
-
-**5. ItemCard Duplicate Rating Fetch** (`ItemCard.tsx:46-59`)
-- **Issue**: Each ItemCard fetched user rating on every parent re-render
-- **Fix**: Added `lastFetchedItemId` ref to prevent duplicate fetches
-- **How**: `if (lastFetchedItemId.current === item.id) return`
-
-**6. Deprecated React.ElementRef** (all shadcn ui components)
-- **Issue**: `React.ElementRef` deprecated in favor of `React.ComponentRef`
-- **Fix**: Global replace in all UI components
-- **Files affected**: accordion, avatar, dialog, dropdown-menu, label, progress, scroll-area, separator, tabs, tooltip
-
-**Tests Added**:
-
-| Service/Component | Tests Added | Coverage Focus |
-|-------------------|-------------|----------------|
-| statsService | 10 | getItemStats, getItemStatsBatch, getUserStats, getPopularItems, getRecentlyRatedItems |
-| profileService | 11 | getCurrentProfile, getProfileByUsername, updateProfile, isUsernameAvailable, getTopRatedItems |
-| SEO | 13 | Meta rendering, JSON-LD schemas (WebSite, Profile, ItemList), edge cases |
-| PageTransition | 12 | PageTransition, StaggerContainer, StaggerItem, FadeIn, reduced motion handling |
-
-**Existing Test Fixes**:
-- Updated StarRating tests for new aria-label format (`.toFixed(1)` = "4.0" not "4")
-- Updated ItemCard test for new aria-label format
-
-**Test Count**: 96 (was 50, +46 new tests)
-
-**All tests passing, build succeeds**
-
----
-
-## [2026-01-01] Major Feature Update: Server-Side Filtering, Pagination, TODO Lists, and Local Migrations
-
-### Infrastructure: Supabase Local Migrations
-
-**What**: Set up local migration folder for version control of database changes.
-
-**Files Created**:
-- `supabase/config.toml` - Supabase project configuration
-- `supabase/migrations/20260101000001_create_user_todo_lists.sql` - TODO list table + RLS
-- `supabase/migrations/20260101000002_add_topic_image_url.sql` - Topic images support
-- `supabase/migrations/20260101000003_create_item_stats_function.sql` - Server-side filtering function
-- `supabase/migrations/20260101000004_create_user_ratings_batch_function.sql` - Batch user ratings
-
-**Database Changes**:
-- New `user_todo_lists` table for per-topic watchlists
-- New `image_url` column on `topics` table
-- New `get_items_with_stats()` PostgreSQL function for server-side filtering
-- New `get_items_with_stats_count()` function for pagination counts
-- New `get_user_ratings_for_items()` function for batch rating fetches
-
----
-
-### Feature: Server-Side Filtering & Pagination
-
-**Problem**: Filtering by rating and "new" was done client-side, causing:
-- All items fetched even when filtering for specific ratings
-- "New" filter used 7-day threshold (should be 30 days based on metadata)
-- No pagination support
-
-**Solution**: Move all filtering to database via PostgreSQL functions.
-
-**Files Modified**:
-- `frontend/src/services/statsService.ts` - Added `getFilteredItems()` and `getUserRatingsBatch()` methods
-- `frontend/src/pages/TopicDetailPage.tsx` - Complete rewrite for server-side filtering + pagination
-- `frontend/src/types/index.ts` - Added `ItemWithStats`, `UserTodoItem` types, `image_url` to Topic
-
-**Files Created**:
-- `frontend/src/components/Pagination.tsx` - Previous/Next pagination component
-
-**Filter Parameters**:
-| Filter | Server Parameter | Value |
-|--------|------------------|-------|
-| All | None | - |
-| 5★ | `p_min_avg_rating` | 4.8 |
-| 4★+ | `p_min_avg_rating` | 4.0 |
-| New | `p_released_after` | 30 days ago (from metadata.release_date or metadata.year) |
-
-**Pagination**: 24 items per page with Previous/Next controls.
-
----
-
-### Feature: TODO Lists (Per-Topic Watchlists)
-
-**What**: Users can add items to a "watch later" list without rating them.
-
-**Files Created**:
-- `frontend/src/services/todoService.ts` - CRUD operations for TODO items
-
-**Service Methods**:
-- `getTodosByTopic(topicId)` - Get user's TODO items for a specific topic
-- `getAllTodos()` - Get all TODO items grouped by topic
-- `addToTodo(itemId, topicId)` - Add item to TODO list
-- `removeFromTodo(itemId)` - Remove item from TODO list
-- `getTodoStatusBatch(itemIds)` - Batch check which items are in TODO list
-
-**Database Table**: `user_todo_lists`
-- `id`, `user_id`, `item_id`, `topic_id`, `priority`, `notes`, `created_at`, `updated_at`
-- Unique constraint on (user_id, item_id)
-- RLS policies: Users manage own lists, public profiles' lists visible
-
----
-
-### Feature: Enhanced ItemCard Component
-
-**What**: Comprehensive ItemCard improvements.
-
-**Files Modified**:
-- `frontend/src/components/ItemCard.tsx`
-- `frontend/src/components/StarRating.tsx` - Added 'xs' size
-
-**Improvements**:
-1. **StarRating for Community Stats**: Replaced Progress bar with fractional StarRating display
-2. **"New" Badge**: Items released in last 30 days (based on metadata.release_date or year) show "New" badge
-3. **Image Fallback Chain**: `item.image_url → metadata.poster_url → metadata.image`
-4. **TODO Button**: Plus button to add unrated items to TODO list
-5. **Enhanced Hover Effects**: `y: -4, scale: 1.02` with subtle shadow
-6. **Pre-fetched User Ratings**: `initialUserRating` prop skips individual API calls
-7. **Optimized API Calls**: Uses `lastFetchedItemId` ref to prevent duplicate fetches
-
-**New Props**:
-- `initialUserRating?: number | null` - Pre-fetched user rating
-- `isInTodo?: boolean` - Whether item is in TODO list
-- `onAddToTodo?: () => void` - Add to TODO callback
-- `onRemoveFromTodo?: () => void` - Remove from TODO callback
-
----
-
-### Feature: Topic Card Images
-
-**What**: Topic cards support background images with gradient overlay.
-
-**Files Modified**:
-- `frontend/src/pages/TopicsPage.tsx` - Image support with fallback
-- `frontend/src/types/index.ts` - Added `image_url` to Topic interface
-
-**Implementation**:
-- If `topic.image_url` exists: Show image with gradient overlay, icon on bottom-left
-- If no image: Show muted background with centered large icon
-
----
-
-### Feature: Item Detail Modal
-
-**What**: Clickable items open a detail modal with topic-specific metadata display.
-
-**Files Created**:
-- `frontend/src/components/ItemDetailModal.tsx`
-
-**Features**:
-- Topic-specific metadata fields (movies: director, year, genre, etc.)
-- Full image display
-- User rating input
-- Community rating display
-- TODO list toggle button
-- Source badge (Curated/AI/User)
-
-**Topic Metadata Configurations**:
-| Topic | Fields Displayed |
-|-------|-----------------|
-| Movies | Year, Director, Genre, Runtime, Cast |
-| Series | Year, Seasons, Network, Creator, Genre |
-| Books | Author, Year, Pages, Publisher, Genre |
-| Anime | Year, Episodes, Studio, Genre, Status |
-| Games | Year, Platform, Developer, Publisher, Genre |
-| Restaurants | Location, Cuisine, Price Range, Address |
-
----
-
-### Bug Fix: API Call Deduplication
-
-**Problem**: React StrictMode caused duplicate API calls in HomePage and TopicsPage.
-
-**Solution**: Added `useRef` guards to prevent duplicate fetches.
-
-**Files Modified**:
-- `frontend/src/pages/HomePage.tsx` - Added `hasFetched` ref
-- `frontend/src/pages/TopicsPage.tsx` - Added `hasFetched` ref
-- `frontend/src/services/profileService.ts` - Added `getCurrentProfileWithRatings()` for consolidated calls
-
----
-
-### Code Quality
-
-**Test Count**: 96 (all passing)
-
-**Build**: Successful (731KB main bundle, acceptable for full feature set)
-
-**Files Summary**:
-- **New files**: 9 (4 migrations, 4 components/services, 1 config)
-- **Modified files**: 10 (pages, services, types)
-- **Database functions**: 3 new PostgreSQL functions
-
----
-
-## [2026-01-02] Modal Integration & Final Wiring
-
-### Feature: Item Detail Modal Integration
-
-**What**: Connected the ItemDetailModal to TopicDetailPage, enabling clickable item cards that open a detail modal with full item information, rating controls, and TODO list management.
-
-**Files Modified**:
-- `frontend/src/pages/TopicDetailPage.tsx` - Complete integration with modal and TODO status tracking
-
-**Implementation Details**:
-
-**Modal State Management**:
-- `selectedItem` state tracks which item's modal is open
-- `isModalOpen` state controls modal visibility
-- `todoStatus` Set tracks which items are in user's TODO list
-
-**New Event Handlers**:
-- `handleItemClick(item)` - Opens modal with item details and topic context
-- `handleRatingChange(rating)` - Saves rating with optimistic update, removes from TODO if rated
-- `handleAddToTodo(itemId)` - Adds item to TODO list with optimistic update
-- `handleRemoveFromTodo(itemId)` - Removes item from TODO list
-
-**Data Flow**:
-1. Items fetched with server-side filtering
-2. User ratings + TODO status fetched in parallel for visible items
-3. Clicking item opens modal with pre-fetched data
-4. Rating in modal updates local state + persists to database
-5. TODO actions update local state + persist to database
-6. Optimistic updates with rollback on error
-
-**Toast Messages**:
-| Action | Success | Error |
-|--------|---------|-------|
-| Rate item | "Noted. Your taste is... interesting." | "Couldn't save that. The database is judging you." |
-| Add to TODO | "Added to your list. No pressure to actually watch it." | "Couldn't add to list. Try again?" |
-| Remove from TODO | (silent) | "Couldn't remove from list." |
-
-**Integration with ItemCard**:
-- `onClick` prop triggers `handleItemClick`
-- `isInTodo` prop reflects TODO status
-- `onAddToTodo` / `onRemoveFromTodo` callbacks for TODO buttons
-- Item passed with topic context for modal display
-
-**Props passed to ItemDetailModal**:
-- `item` - Selected item with topic attached
-- `open` / `onOpenChange` - Modal visibility control
-- `avgRating` / `ratingCount` - Community stats
-- `userRating` - Current user's rating
-- `onRatingChange` - Rating callback
-- `isInTodo` - TODO status
-- `onAddToTodo` / `onRemoveFromTodo` - TODO callbacks
-- `isAuthenticated` - Controls what actions are shown
-
-**Build**: Successful (766KB main bundle)
-**Tests**: 96 passing
-
----
-
-## [2026-01-03] Documentation Restructure
-
-### Context
-CLAUDE.md had grown to ~4.6k tokens with mixed concerns (core reference, development guidelines, architecture, roadmap). This caused:
-- High token usage on every conversation
-- Difficulty finding relevant information
-- Outdated/incorrect information (e.g., claiming migrations aren't stored locally when they are)
-- Unclear "what can users do NOW" vs. future plans
-
-### Decision: Split Documentation into Focused Files
-
-**What Changed**:
-- **CLAUDE.md** (new, ~2.5k tokens): Core reference with current E2E flows, quick start, key patterns
-- **docs/DEVELOPMENT_GUIDELINES.md** (new): Mandatory standards, security, testing, code patterns
-- **docs/ROADMAP.md** (new): Current capabilities and future MVPs with clear user flows
-- **docs/ARCHITECTURE.md** (new): Technical details, database schema, RLS policies, deployment
-
-**Rationale**:
-- **Performance**: Load only relevant documentation per task (e.g., only load DEVELOPMENT_GUIDELINES.md when implementing features)
-- **Clarity**: Each file has single responsibility
-- **Accuracy**: Fixed inaccuracies about local migrations and edge functions
-- **Maintainability**: Easier to update specific sections without affecting entire doc
-
-**Specific Fixes in CLAUDE.md**:
-1. **Line 82** (old): "Database migrations and Edge Functions are managed via Supabase Dashboard/MCP, not stored locally."
-   - **Fixed**: "Migrations are version-controlled locally in `supabase/migrations/`. Edge Functions are deployed via Supabase MCP tools and not stored locally."
-
-2. **Line 118** (old): "Database is managed via Supabase Dashboard or MCP tools. No local migration files."
-   - **Fixed**: Clarified local migrations workflow with proper commands
-
-3. **Lines 466-522** (old): Granular checklist of completed tasks mixed with "in progress"
-   - **Fixed**: Replaced with "What Users Can Do Now" section showing 4 working E2E flows and known limitations
-
-**New Structure Benefits**:
-- CLAUDE.md: Always loaded, provides core context and quick reference
-- DEVELOPMENT_GUIDELINES.md: Load when implementing features (security, testing, patterns)
-- ROADMAP.md: Load when planning features or discussing future work
-- ARCHITECTURE.md: Load when making architectural changes or debugging infrastructure
-
-**Migration for AI Agent**:
-- References updated throughout to point to new file locations
-- All content preserved, just reorganized
-
-**Impact**:
-- Token usage: Reduced from ~4.6k to ~2.5k in default context
-- Improved clarity: Clear E2E flow descriptions for current capabilities
-- Accurate documentation: Fixed migration storage claims
-- Future-proof: Easier to maintain as project grows
-
----
-
-## [2026-01-03] TopicDetailPage Performance & UI Fixes
-
-### Bug Fixes: API Call Deduplication and UI Issues
-
-**What**: Fixed multiple performance and UI issues on the `/topics/:slug` page.
-
-**Files Modified**:
-- `frontend/src/pages/TopicDetailPage.tsx` - Fixed duplicate API calls and invisible items
-- `frontend/src/services/statsService.ts` - Added userId parameter to avoid redundant getUser() calls
-- `frontend/src/components/ItemCard.tsx` - Fixed user rating not syncing with prop changes
-
-**Bug Details**:
-
-**1. Duplicate /topics API Calls** (`TopicDetailPage.tsx:91-206`)
-- **Issue**: Topic was fetched multiple times when `fetchItems` callback changed (due to `user` dependency in useCallback)
-- **Root Cause**: `hasFetchedTopic.current` was reset every time the effect ran, including when only `fetchItems` changed
-- **Fix**: Added `currentSlug` ref to track actual slug changes; only reset state when slug changes, not when fetchItems ref changes
-- **How**: `if (hasFetchedTopic.current && currentSlug.current === slug) return`
-
-**2. Duplicate /user API Calls** (`statsService.ts:340-368`)
-- **Issue**: `getUserRatingsBatch()` called `supabase.auth.getUser()` internally, even though caller already had user from auth store
-- **Root Cause**: Service method fetched user internally instead of accepting it as parameter
-- **Fix**: Added optional `userId` parameter to `getUserRatingsBatch()`; falls back to fetching for backwards compatibility
-- **How**: Pass `user.id` from TopicDetailPage: `statsService.getUserRatingsBatch(itemIds, user.id)`
-
-**3. User Rating Not Displaying** (`ItemCard.tsx:110-115`)
-- **Issue**: User ratings didn't appear after async batch load completed
-- **Root Cause**: `useState` only uses initial value on mount; when `initialUserRating` prop updated asynchronously, component state didn't sync
-- **Fix**: Added `useEffect` to sync state with prop when `initialUserRating` changes
-- **How**: `useEffect(() => { if (initialUserRating !== undefined) setUserRating(initialUserRating) }, [initialUserRating])`
-
-**4. Items Invisible (opacity=0) Between Searches** (`TopicDetailPage.tsx:436-439`)
-- **Issue**: After search/filter changes, items were in DOM (clickable) but invisible with opacity=0
-- **Root Cause**: `StaggerContainer` animation state was "animate" from previous render; new `StaggerItem` children with `initial: opacity 0` weren't triggering animation to `animate: opacity 1`
-- **Fix**: Added `key` prop to `StaggerContainer` based on search parameters, forcing remount and fresh animation
-- **How**: `<StaggerContainer key={\`${debouncedSearchQuery}-${activeFilter}-${currentPage}\`}>`
-
-**Tests**: 96 passing (no changes)
-**Build**: Successful (767KB main bundle)
-
----
-
-## [2026-01-04] Fix Topic Filter Rendering Issues
-
-### Problem
-When filtering items on topic pages (e.g., anime → 5★ → All), users experienced:
-1. **Items scattering** - grid positions shifting erratically
-2. **Impagination effects** - items repositioning multiple times before settling
-3. **Invisible but clickable items** - DOM elements present but not visible during animations
-
-### Root Cause Analysis
-1. **StaggerContainer with dynamic key prop** (`TopicDetailPage.tsx:476`):
-   ```tsx
-   <StaggerContainer key={`${debouncedSearchQuery}-${activeFilter}-${currentPage}`}>
-   ```
-   - Caused React to completely unmount/remount the entire grid on filter changes
-   - Destroyed all DOM elements and recreated them from scratch
-   - Triggered full animation sequence replay (stagger delays, fade-in, slide-up)
-
-2. **Stagger animations creating invisible states**:
-   - Items animated from `opacity: 0, y: 12` to `opacity: 1, y: 0` over 0.3s
-   - During animation, items were invisible (`opacity: 0`) but still in DOM (clickable)
-   - Stagger delay (0.05s per item) created sequential "impagination" effect
-
-3. **Multiple useEffect hooks causing redundant fetches**:
-   - One effect reset page to 1 on filter change
-   - Another effect fetched items on filter/page change
-   - Both fired sequentially, causing double renders
-
-### Solution Implemented
-1. **Removed key prop from grid container**:
-   - Let React reuse existing DOM and update children (items already have unique `item.id` keys)
-   - Prevents full grid remount on filter changes
-
-2. **Replaced StaggerContainer with AnimatePresence**:
-   ```tsx
-   <AnimatePresence mode="popLayout">
-     {items.map(item => (
-       <motion.div key={item.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-   ```
-   - `mode="popLayout"` smoothly repositions items without destroying them
-   - `layout` prop animates position changes automatically
-   - Simpler opacity-only transition (0.2s, no stagger delays)
-   - Proper exit animations for removed items
-
-3. **Kept useEffect hooks separate but simplified**:
-   - First effect: Reset page to 1 when filter/search changes (only depends on those)
-   - Second effect: Fetch items when page/filter/search/topic changes
-   - Accepted potential double fetch on filter change (minor trade-off for code clarity)
-
-### Impact
-- **Visual stability**: Items no longer scatter or reposition multiple times
-- **Performance**: Grid reuses DOM instead of recreating on every filter change
-- **Accessibility**: No invisible clickable elements during transitions
-- **Simpler animations**: Faster, cleaner transitions (0.2s vs 0.3s + stagger delays)
-
-### Files Changed
-- `frontend/src/pages/TopicDetailPage.tsx`:
-  - Added `AnimatePresence` import from framer-motion
-  - Removed `StaggerContainer` and `StaggerItem` imports
-  - Replaced grid container with `AnimatePresence` + `motion.div` with `layout` prop
-  - Simplified animation: opacity-only transition with layout animation
-
-### Testing
-- ✅ All tests pass (96 tests)
-- ✅ Build succeeds with no TypeScript errors
-- ✅ Reproduction steps (anime → 5★ → All) should now show smooth transitions
-
----
-
-## [2026-01-04] Add Skeleton Loading for User Data in ItemCard
-
-### Problem
-When ItemCards loaded on topic pages, they initially showed:
-1. **Empty star rating** (no stars filled)
-2. **Add to watch later button** visible immediately
-
-These UI elements depend on API calls that fetch user ratings and TODO status. During the loading period, users saw incomplete/misleading UI instead of loading indicators.
-
-### Root Cause
-- ItemCards received `initialUserRating={null}` on initial render
-- User data (ratings + TODO status) fetched in batch AFTER items loaded
-- No loading state communicated to ItemCard during this gap
-- Result: Empty stars and TODO button appeared before actual data loaded
-
-### Solution Implemented
-1. **Added `isUserDataLoading` prop to ItemCard**:
-   - New optional boolean prop to indicate user data is loading
-   - Defaults to `false` for backwards compatibility
-
-2. **Skeleton loading state in ItemCard** (`ItemCard.tsx:275-279`):
-   ```tsx
-   {user && isUserDataLoading ? (
-     <div className="flex items-center justify-between">
-       <Skeleton className="h-5 w-24" />  {/* Star rating skeleton */}
-       <Skeleton className="h-6 w-6 rounded" />  {/* TODO button skeleton */}
-     </div>
-   ) : (
-     /* Actual rating UI */
-   )}
-   ```
-
-3. **Loading state tracking in TopicDetailPage**:
-   - Added `loadingUserData` state
-   - Set to `true` when fetching user ratings/TODO status
-   - Set to `false` when batch fetch completes
-   - Reset to `false` when topic changes
-   - Passed to all ItemCard instances
-
-### Impact
-- **Better UX**: Clear loading indicators instead of empty UI
-- **No misleading states**: Users don't see empty stars before data loads
-- **Consistent pattern**: Uses same Skeleton component as other loading states
-- **Fast perceived performance**: Skeletons indicate active loading
-
-### Files Changed
-- `frontend/src/components/ItemCard.tsx`:
-  - Added `isUserDataLoading` prop to interface
-  - Imported Skeleton component
-  - Added conditional skeleton rendering for user data
-  - Updated memo comparison to include new prop
-
-- `frontend/src/pages/TopicDetailPage.tsx`:
-  - Added `loadingUserData` state
-  - Set loading state in `fetchItems` before/after user data fetch
-  - Reset loading state in topic change handler
-  - Passed `isUserDataLoading` to all ItemCard instances
-
-### Testing
-- ✅ All tests pass (96 tests)
-- ✅ Build succeeds with no TypeScript errors
-- ✅ Skeleton displays while user data loads, then shows actual rating/TODO UI
-
----
-
-## [2026-01-04] Rewrite README.md with Accurate Project State
-
-### Problem
-README.md contained outdated and misleading information:
-1. **False claims**: Stated AI enrichment was working ("AI Creates Missing Items" in How It Works)
-2. **Incorrect project structure**: Said "No local supabase/ folder needed" when migrations ARE version-controlled locally
-3. **Missing critical info**: No mention of current MVP 1 capabilities, limitations, testing coverage, or documentation structure
-4. **Poor developer onboarding**: Minimal quick start, no contributing guidelines, no link to comprehensive docs
-
-### What Changed
-**Complete rewrite of README.md** to align with documentation in `docs/*`:
-
-1. **Accurate current state**:
-   - Added "What You Can Do Now (MVP 1)" section listing working features
-   - Added "Current Limitations" section clarifying AI enrichment is NOT yet implemented
-   - Moved AI enrichment to "The Vision" section (future capability)
-   - Simplified authentication features (removed implementation details like "automatic profile creation")
-
-2. **Corrected technical information**:
-   - Fixed project structure to include `supabase/migrations/` folder
-   - Updated tech stack table to clarify AI is "coming in MVP 2"
-   - Added production URL: https://mytops.io
-
-3. **Simplified documentation structure**:
-   - Added links to all docs/* files (ARCHITECTURE, DEVELOPMENT_GUIDELINES, ROADMAP, CHANGELOG, CLAUDE.md)
-   - Development Guidelines section now only links to full documentation (no inline content)
-   - Removed Database section (details in ARCHITECTURE.md)
-   - Removed Deployment section (details in ARCHITECTURE.md)
-   - Added Testing section highlighting 50+ tests
-   - Added Environment Variables section with security guidance
-
-4. **Better developer experience**:
-   - Expanded Quick Start with prerequisites, setup, testing, building
-   - Added Contributing section pointing to mandatory documentation
-   - Improved structure following standard GitHub README conventions
-   - Added "The Vibe" section capturing brand personality
-   - Kept README focused on essentials, delegating details to docs/*
-
-### Why This Change
-- **Documentation is Law**: README must reflect actual project state (Development Guidelines pillar #3)
-- **False expectations**: Users and contributors were misled about AI capabilities
-- **Poor onboarding**: Developers had minimal guidance on setup, testing, contributing
-- **Information scattered**: Critical info was only in docs/* with no README links
-
-### Breaking Changes
-None - purely documentation update
-
-### Migration
-None required - this is a documentation-only change
-
----
-
-## [2026-01-05] Complete Image Storage Implementation with Lazy Loading Fix
-
-### Problem
-Topics and items lacked visual imagery. Database had `image_url` fields but no storage infrastructure, no lazy loading optimization, and text-heavy cards needed visual enhancement. Additionally, LazyImage component had a critical bug preventing lazy loading from working.
-
-### What Changed
-
-#### Backend - Supabase Storage
-- Created `topic-images` and `item-images` storage buckets (5MB limit, WebP/JPEG/PNG)
-- Added RLS policies: public read access, service role write access
-- Images uploaded following naming convention: `{slug}.png` for topics, `{topic-slug}/{item-slug}` for items
-
-#### Frontend - LazyImage Bug Fix & Integration
-- **Fixed critical LazyImage bug** (`frontend/src/components/LazyImage.tsx`):
-  - Bug: IntersectionObserver watched `img` element that didn't exist yet (chicken-and-egg problem)
-  - Fix: Observer now watches `container` div which always exists
-  - Result: Lazy loading works correctly, images load when entering viewport
-- Created storage URL helpers (`frontend/src/lib/storage.ts`)
-- Updated **TopicsPage**: LazyImage in absolute-positioned wrapper, refined gradient (`via-background/40`)
-- Redesigned **ItemCard**: Background image approach with h-64 cards, gradient overlay, content at bottom
-- Updated **ItemDetailModal**: LazyImage hero section (h-56 md:h-72)
-
-#### Testing
-- Added IntersectionObserver mock to test setup (`frontend/src/test/setup.ts`)
-- Updated ItemCard tests for LazyImage behavior
-- All 96 tests passing
-
-### Technical Decisions
-
-**LazyImage Bug Root Cause**: Component had chicken-and-egg problem where IntersectionObserver tried to observe an `<img>` element that only renders after observer triggers. Fixed by observing the container div instead.
-
-**Test Mocking**: Added proper IntersectionObserver mock in test setup rather than adding fallbacks in component code, following best practices for test isolation.
-
-**Background Image Design**: Modern card aesthetic with gradient overlays ensuring text readability, matching contemporary UI patterns.
-
-### Verification
-- ✅ Lazy loading works correctly (IntersectionObserver fixed)
-- ✅ Images load when entering viewport (50px rootMargin)
-- ✅ All 96 tests passing
-- ✅ Storage buckets and RLS policies verified
-- ✅ No console errors or warnings
-
----
-
-## [2026-01-05] SEO & Performance Optimization
-
-### What Changed
-Implemented comprehensive SEO infrastructure and performance optimizations to improve search engine visibility, Core Web Vitals, and accessibility compliance.
-
-### Added
-
-**SEO Infrastructure:**
-- `frontend/public/robots.txt` - Search engine crawler directives (allow all public routes, disallow profile/auth)
-- `frontend/public/sitemap.xml` - Static sitemap with homepage, topics page, and individual topic pages
-- `frontend/public/site.webmanifest` - PWA manifest for installability and app-like experience
-- `frontend/index.html` - Comprehensive meta tags (Open Graph, Twitter Cards, theme colors, favicons, preconnects to Supabase)
-
-**Performance Optimizations:**
-- `vite-plugin-compression` dependency - Build-time gzip/brotli compression (50-70% size reduction)
-- Route-level code splitting for LoginPage, RegisterPage, ProfilePage, TopicDetailPage
-- LazyImage component enhancements: width/height props for CLS optimization, fetchPriority for LCP, sizes attribute for responsive images
-
-**Accessibility Improvements (WCAG 2.2 AA):**
-- TopicDetailPage: Added `<label>` for search input, aria-live regions for results count and searching status
-- HomePage: Enhanced link aria-labels ("Start curating your favorites by browsing topics"), added focus rings to carousel controls
-- All decorative icons marked with `aria-hidden="true"`
-- ItemDetailModal: Added DialogDescription to fix accessibility warning
-
-**Structured Data:**
-- New BreadcrumbListSchema component for navigation hierarchy
-- New CollectionPageSchema component for topic pages
-- Enhanced SEO.tsx with additional schema types
-
-**Cache Headers:**
-- HTML pages: no-cache (always fetch fresh)
-- Static assets: 1-year cache with immutable flag
-- Images (png, jpg, svg, webp): 1-year cache
-- Manifest/robots/sitemap: 24-hour cache
-
-### Changed
-
-**`frontend/index.html`:**
-- Replaced generic "frontend" title with descriptive "mytops - Track Your Favorite Movies, Books, Games & More"
-- Added meta description, Open Graph tags, Twitter Card tags
-- Added theme-color meta tags for light/dark mode
-- Added preconnect hints to Supabase (ocasihbuejfjirsrnxzq.supabase.co)
-- Added favicon references (ico, png, apple-touch-icon, manifest)
-
-**`frontend/vite.config.ts`:**
-- Added vite-plugin-compression with gzip and brotli algorithms
-
-**`frontend/src/App.tsx`:**
-- Converted LoginPage, RegisterPage, TopicDetailPage, ProfilePage to lazy-loaded imports
-- Added Suspense boundaries with loading fallbacks
-- Added default exports to all lazy-loaded page components
-
-**`frontend/src/components/LazyImage.tsx`:**
-- Added optional width/height props (CLS optimization)
-- Added fetchPriority prop (high/low/auto) for LCP optimization
-- Added sizes prop for responsive image optimization
-- Updated memo comparison to include new props
-
-**`frontend/src/components/ItemDetailModal.tsx`:**
-- Added DialogDescription import and component to fix "Missing Description" warning
-- Description now shows item.description or fallback text
-
-**`frontend/src/pages/TopicDetailPage.tsx`:**
-- Added visually-hidden `<label>` for search input
-- Added aria-label to search input
-- Added role="status" aria-live="polite" to results count badge
-- Added role="status" aria-live="polite" to searching spinner
-- Added aria-hidden="true" to decorative Search icon
-
-**`frontend/src/pages/HomePage.tsx`:**
-- Enhanced "Start Curating" link with descriptive aria-label
-- Enhanced "Create Account" link with descriptive aria-label
-- Added focus:ring styles to carousel pause/play button and dots
-- Added aria-hidden="true" to Pause/Play icons
-
-**`frontend/public/_headers`:**
-- Added cache rules for HTML (no-cache)
-- Added cache rules for images (1-year immutable)
-- Added cache rules for manifest, robots, sitemap (24-hour)
-
-**`frontend/src/components/SEO.tsx`:**
-- Added BreadcrumbListSchema export for navigation hierarchy
-- Added CollectionPageSchema export for topic collection pages
-- Added JSDoc comments for new schema components
-
-### Why
-**Problem:**
-- Application lacked basic SEO infrastructure (no robots.txt, sitemap, proper meta tags)
-- Generic page titles and missing Open Graph tags hurt social sharing
-- No build-time compression resulted in larger transfer sizes
-- Initial bundle included all pages, slowing first load
-- Missing accessibility labels for screen readers
-- DialogContent warning in console when opening item details
-- No CLS optimization in images
-- Cache headers not optimized for static assets
-
-**Solution:**
-- SEO infrastructure enables search engine indexing and improves social media previews
-- Build-time compression reduces bandwidth usage by 50-70%
-- Route-level code splitting reduces initial bundle size, improving Time to Interactive
-- LazyImage enhancements prevent layout shifts (better CLS score)
-- Accessibility improvements ensure WCAG 2.2 AA compliance
-- DialogDescription fixes Radix UI accessibility requirement
-- Structured data helps search engines understand site content
-- Optimized cache headers improve repeat visit performance
-
-### Performance Impact
-- **Expected Lighthouse Performance:** 90+ (up from ~70-80)
-- **Expected Lighthouse SEO:** 100 (up from ~70)
-- **Bundle size reduction:** ~50-70% with compression enabled
-- **Initial bundle size:** Reduced due to lazy loading of auth and topic detail pages
-- **CLS improvement:** LazyImage now supports explicit dimensions
-- **LCP improvement:** Preconnect to Supabase, fetchPriority support
-
-### Breaking Changes
-None. All changes are additive or internal optimizations.
-
-### Migration Steps
-None required. Changes are transparent to users.
-
-### Testing
-- `npm run build`: ✅ Successful (verified compression output)
-- `npm test`: ✅ All 101 tests passed (added 5 new tests for BreadcrumbListSchema and CollectionPageSchema)
-- Bundle analysis: Lazy-loaded chunks properly split
-- Compression: Both gzip and brotli files generated successfully
-- Console warnings: DialogContent warning resolved
-
-### Security Implications
-- Preconnect to Supabase URL is safe (public anon key already used in frontend)
-- All meta tags use publicly available information
-- No secrets or sensitive data exposed
-- Cache headers follow best practices (no-cache for HTML, long cache for immutable assets)
-
----
-
-## [2026-01-11] MVP 2: AI-Powered Database Enrichment
-
-### Feature: AI Item Enrichment with Web Search
-
-**What**: Implemented the core "self-building database" feature. When users search for items that don't exist, the system offers to search the web, extract structured data using Claude AI, and automatically add enriched items to the database.
-
-**How It Works**:
-1. User searches for non-existent item (e.g., "The Matrix")
-2. System detects no results and offers "Search the Web" button
-3. Claude API with tool_use calls Tavily web search to find information
-4. AI extracts structured, topic-specific metadata (year, director, genre, etc.)
-5. System downloads and stores poster/cover image in Supabase Storage
-6. Enriched item inserted into database with confidence score
-7. User can immediately rate and add to preferables
-
-**Files Created**:
-
-**Database:**
-- `supabase/migrations/create_app_config_table.sql` - Feature flags and app configuration
-- `supabase/migrations/create_user_enrichment_requests_table.sql` - Rate limiting and audit tracking
-- `supabase/migrations/create_check_enrichment_rate_limit_function.sql` - Daily quota enforcement
-- `supabase/migrations/add_review_pending_to_items.sql` - Moderation queue for low-confidence items
-
-**Edge Function:**
-- Edge function `ai-enrich-item` deployed with comprehensive implementation:
-  - Authentication validation with JWT
-  - Feature flag checks (`app_config.ai_enrichment_enabled`)
-  - Rate limiting (5 requests/user/day default)
-  - Tavily API integration for web search
-  - Claude API integration with tool_use pattern
-  - Topic-specific metadata extraction (movies, series, books, anime, games, restaurants)
-  - Image download and WebP conversion
-  - Duplicate detection (fuzzy matching)
-  - Confidence-based moderation (≥0.8 auto-approve, 0.6-0.8 flagged, <0.6 rejected)
-
-**Frontend:**
-- `frontend/src/services/enrichmentService.ts` - API client for enrichment requests
-- `frontend/src/services/enrichmentService.test.ts` - Service unit tests (8 tests)
-- `frontend/src/hooks/useEnrichment.ts` - Enrichment state management hook
-- `frontend/src/components/EnrichmentPrompt.tsx` - UI component with loading states
-- `frontend/src/components/EnrichmentPrompt.test.tsx` - Component tests (10 tests)
-
-**Files Modified:**
-- `frontend/src/pages/TopicDetailPage.tsx` - Integrated enrichment prompt in empty state
-- Database schema: Added `review_pending` column to `items` table
-
-**Implementation Details**:
-
-**AI Architecture:**
-- **Claude API**: Sonnet 3.5 with `tool_use` for web search capability
-- **Web Search Backend**: Tavily API (1,000 free queries/month)
-- **Structured Output**: Topic-specific JSON schemas validated before insertion
-- **Confidence Scoring**: 0.0-1.0 score based on source reliability and data consistency
-
-**Topic-Specific Metadata Schemas:**
-| Topic | Required Fields | Optional Fields |
-|-------|----------------|-----------------|
-| Movies | year, director, genre | runtime, cast |
-| Series | year, genre | seasons, network, cast |
-| Books | author, year, genre | pages, isbn |
-| Anime | year, genre | studio, episodes, type |
-| Games | year, developer, genre | publisher, platforms |
-| Restaurants | cuisine, location | price_range, style |
-
-**Image Handling:**
-- **Source Priority**: TMDB → IMDB → Wikipedia → Official sites (strictly followed)
-- **Storage**: Supabase Storage (`item-images/{topic_slug}/{item_slug}.webp`)
-- **Format**: Downloaded as original, stored as WebP
-- **Size**: Max 500KB after conversion
-
-**Security & Abuse Prevention:**
-1. **Authentication**: Valid JWT required, user_id extracted for attribution
-2. **Rate Limiting**: 5 requests/user/day (configurable via `app_config`)
-3. **Input Validation**: 200 char max query length, topic validation, special char stripping
-4. **Output Validation**: Schema validation, confidence threshold (≥0.6), allowed image domains
-5. **Duplicate Detection**: Fuzzy matching on existing items before enrichment
-6. **Feature Flag**: Kill switch in `app_config` table
-
-**Moderation System:**
-```
-Confidence Thresholds:
-├── ≥ 0.8  → Auto-approve, immediately public
-├── 0.6-0.8 → Save with review_pending=true, visible but flagged
-└── < 0.6   → Reject, not saved to database
-```
-
-**User Experience:**
-- **Loading States**: Multi-phase progress (Searching → Extracting → Saving)
-- **Rate Limit Display**: Shows remaining requests when < 3 left
-- **Error Messages**: Helpful suggestions (check typos, try original language, verify topic)
-- **Brand Voice**: Self-deprecating humor maintained ("Slow down there, speed racer")
-- **Toast Notifications**: Success confirmation when item added
-
-**Cost Management:**
-| Component | Cost per Request | Notes |
-|-----------|-----------------|-------|
-| Tavily API | ~$0.008 | After 1,000 free queries/month |
-| Claude Sonnet | ~$0.03-0.05 | With tool_use |
-| Image Storage | ~$0.001 | Supabase Storage |
-| **Total** | ~$0.04-0.07 | Per enrichment |
-
-**Free Tier Coverage:** With Tavily's free tier and 5 req/user/day limit, supports significant usage before costs.
-
-**Required Secrets** (set in Supabase Dashboard):
-- `ANTHROPIC_API_KEY` - Claude API access
-- `TAVILY_API_KEY` - Web search backend
-
-**Testing:**
-- **Test Count**: 119 (was 96, +18 new tests +5 refactored)
-- **Service Tests**: enrichmentService.test.ts (8 tests covering auth, rate limits, errors)
-- **Component Tests**: EnrichmentPrompt.test.tsx (10 tests covering all states and interactions)
-- **Build**: Successful (767KB main bundle)
-
-**Next Steps:**
-- Monitor enrichment success rates and adjust confidence thresholds
-- Review flagged items (review_pending=true) for quality
-- Consider adding more data sources if Tavily results insufficient
-- Track API costs and adjust rate limits as needed
-
-**References:**
-- Full implementation plan: `docs/MVP2_AI_ENRICHMENT_PLAN.md`
-- Tavily API: https://tavily.com
-- Claude API Tool Use: https://docs.anthropic.com/claude/docs/tool-use
-
----
-
-## [2026-01-11] Bug Fix: EnrichmentPrompt Not Showing
-
-### Problem
-After implementing the AI enrichment feature, the EnrichmentPrompt component wasn't displaying when users searched for non-existent items.
-
-### Root Cause
-Timing mismatch between immediate `searchQuery` state and debounced `debouncedSearchQuery` used for API calls:
-1. User types "The Matrix" → `searchQuery` immediately updates to "The Matrix"
-2. EnrichmentPrompt condition checked `searchQuery && user && activeFilter === 'all'`
-3. But API call used `debouncedSearchQuery` (300ms delay)
-4. Empty state showed before search completed, condition evaluated to `true` prematurely
-5. When results came back empty, component was checking wrong variable
-
-### Solution
-Changed condition to use `debouncedSearchQuery` instead of `searchQuery` and added `!searching` check:
-```typescript
-// Before (broken)
-{searchQuery && user && activeFilter === 'all' ? (
-
-// After (fixed)
-{debouncedSearchQuery && user && activeFilter === 'all' && !searching ? (
-```
-
-This ensures:
-- EnrichmentPrompt only shows after debounced search completes
-- Not shown while search is in progress (`!searching`)
-- Matches the same query variable used by the API call
-
-### Files Modified
-- `frontend/src/pages/TopicDetailPage.tsx` - Updated condition and all references to use `debouncedSearchQuery`
-
-### Testing
-- ✅ All 119 tests passing
-- ✅ Build successful
-- ✅ EnrichmentPrompt now appears correctly when:
-  - User searches for non-existent item
-  - User is authenticated
-  - No active filters
-  - Search has completed and returned empty results
-
----
-
-## [2026-01-13] Bug Fix: Edge Function 401 Authentication Error
-
-### Problem
-When calling the `ai-enrich-item` edge function from the frontend, all requests were returning 401 Unauthorized errors, preventing the AI enrichment feature from working.
-
-### Root Cause
-The edge function was deployed with `verify_jwt: true`, which tells Supabase to automatically validate JWT tokens before the function code executes. When this automatic validation fails (or is misconfigured), Supabase returns a 401 error immediately, preventing the function's custom authentication logic from ever running.
-
-### Solution
-Redeployed the edge function with `verify_jwt: false`. The function already has comprehensive manual authentication handling:
-```typescript
-// Manual auth in edge function (lines 453-460)
-const authHeader = req.headers.get('Authorization');
-if (!authHeader?.startsWith('Bearer ')) {
-  return new Response(JSON.stringify({ error: 'Missing authorization header' }), { status: 401 });
-}
-
-const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-if (authError || !user) {
-  return new Response(JSON.stringify({ error: 'Invalid authentication' }), { status: 401 });
-}
-```
-
-By disabling automatic JWT verification, requests now reach the function code where proper authentication is performed.
-
-### Why Manual Auth is Better Here
-- **More control**: Custom error messages and logging
-- **Flexibility**: Can add additional auth checks or custom validation
-- **Consistency**: All edge function logic in one place
-- **Debugging**: Auth failures visible in edge function logs
-
-### Files Modified
-- Edge function `ai-enrich-item` - Redeployed as version 4 with `verify_jwt: false`
-
-### Verification
-- ✅ Edge function deployed successfully (version 4)
-- ✅ `verify_jwt` confirmed as `false` in deployment metadata
-- ✅ Function still has manual authentication checks in place
-
-### Impact
-- Authentication now works correctly for enrichment requests
-- Frontend can successfully call the AI enrichment endpoint
-- Manual auth provides better error messages and debugging capabilities
-
----
+**Last updated**: 2026-01-15
