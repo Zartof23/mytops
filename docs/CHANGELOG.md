@@ -16,6 +16,28 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-04-24] Fix AI Enrichment Edge Function (Model Retirement + Parallel Tool Use)
+
+**What**: Restored the `ai-enrich-item` Edge Function, which had been silently returning HTTP 500 since 2026-01-15.
+
+**Root causes**:
+1. **Retired model** — function was pinned to `claude-3-5-haiku-20241022`, which Anthropic retired. API returned `404 not_found_error`, which didn't match any of the OUT_OF_GAS branches and fell through to the generic 500 catch-all.
+2. **Silent failure** — outer `try/catch` returned 500 without updating `user_enrichment_requests.status`. 12 rows had been stuck in `processing` since January with `error_message = NULL`, making the outage invisible.
+3. **Parallel tool use (after model bump)** — Claude 4.x emits multiple `tool_use` blocks per assistant turn. Original code handled only the first via `.find()`, leaving other `tool_use` blocks without matching `tool_result` blocks → API rejected the next turn with `400 invalid_request_error`.
+
+**Fixes**:
+- Bumped model to `claude-haiku-4-5-20251001` (current Haiku).
+- Outer `catch` now writes `error.name`, `error.message`, and `error.status` into `user_enrichment_requests.error_message` so failures are observable.
+- Tool-use loop now uses `.filter()` + `Promise.all` to execute all parallel `tool_use` blocks and return one `tool_result` per `tool_use`. Per-tool errors are isolated with `is_error: true` so one failed search doesn't kill the whole turn.
+- Saved Edge Function source to `supabase/functions/ai-enrich-item/index.ts` (was previously not in the repo — only deployed).
+- Backfilled the 12 stuck `processing` rows to `failed` with an explanatory message.
+
+**Impact**: AI enrichment works again. Future Claude/Anthropic failures will surface real diagnostics instead of a generic 500.
+
+**Files**: `supabase/functions/ai-enrich-item/index.ts` (new in repo, deployed v9)
+
+---
+
 ### [2026-01-15] Skills Restructure with Context Integration
 
 **What**: Updated and created skills to use the new context file structure.
