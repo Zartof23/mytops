@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
 import { Outlet, Link } from 'react-router-dom'
+import { Linkedin, Globe } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { ThemeToggle } from './ThemeToggle'
+import { GitHubStarBadge } from './GitHubStarBadge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
@@ -37,9 +39,12 @@ export function Layout() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="text-lg font-bold tracking-tight">
-            mytops
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="text-lg font-bold tracking-tight">
+              mytops
+            </Link>
+            <GitHubStarBadge />
+          </div>
 
           <nav className="flex items-center gap-1" aria-label="Main navigation">
             <Button variant="ghost" size="sm" asChild>
@@ -83,8 +88,30 @@ export function Layout() {
 
       {/* Footer */}
       <footer className="border-t">
-        <div className="container mx-auto px-4 py-4 text-center text-xs text-muted-foreground">
+        <div className="container mx-auto px-4 py-4 flex flex-col items-center gap-3 text-center text-xs text-muted-foreground">
           <p>Built by a backend dev who doesn't usually do frontend.</p>
+          <div className="flex items-center gap-2">
+            <a
+              href="https://robertocalo.me/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label="Roberto Calo's personal website"
+            >
+              <Globe className="h-3.5 w-3.5" aria-hidden="true" />
+              robertocalo.me
+            </a>
+            <a
+              href="https://www.linkedin.com/in/roberto-calo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label="Roberto Calo on LinkedIn"
+            >
+              <Linkedin className="h-3.5 w-3.5" aria-hidden="true" />
+              LinkedIn
+            </a>
+          </div>
         </div>
       </footer>
 

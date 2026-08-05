@@ -42,6 +42,8 @@ interface ItemCardProps {
   onRemoveFromTodo?: () => void
   /** Whether user data (rating/TODO status) is still loading */
   isUserDataLoading?: boolean
+  /** Called after a rating is successfully saved, so parent state (e.g. community stats) can stay in sync */
+  onRatingChange?: (rating: number, previousRating: number | null) => void
 }
 
 const SOURCE_BADGES = {
@@ -128,7 +130,8 @@ const ItemCardComponent = ({
   isInTodo = false,
   onAddToTodo,
   onRemoveFromTodo,
-  isUserDataLoading = false
+  isUserDataLoading = false,
+  onRatingChange
 }: ItemCardProps) => {
   const { user } = useAuthStore()
   const [userRating, setUserRating] = useState<number | null>(
@@ -201,10 +204,11 @@ const ItemCardComponent = ({
       toast.error("Couldn't save that. Try again?")
     } else {
       toast.success("Noted. Your taste is... interesting.")
+      onRatingChange?.(rating, previousRating)
     }
 
     setIsLoading(false)
-  }, [user, userRating, item.id])
+  }, [user, userRating, item.id, onRatingChange])
 
   const handleCardClick = useCallback(() => {
     onClick?.()
@@ -412,6 +416,7 @@ export const ItemCard = memo(ItemCardComponent, (prevProps, nextProps) => {
     prevProps.isUserDataLoading === nextProps.isUserDataLoading &&
     prevProps.onClick === nextProps.onClick &&
     prevProps.onAddToTodo === nextProps.onAddToTodo &&
-    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo
+    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo &&
+    prevProps.onRatingChange === nextProps.onRatingChange
   )
 })

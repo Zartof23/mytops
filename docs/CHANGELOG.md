@@ -16,6 +16,24 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-05] Detail Dialog Image Crop, Rating View Sync, TODO List Surface, Homepage/Footer Content
+
+**What**:
+- `LazyImage` gained an `objectFit` prop (`cover` | `contain`); `ItemDetailModal`'s hero image now uses `contain` so posters/covers aren't cropped.
+- Rating an item from the `TopicDetailPage` grid (`ItemCard`) now updates the item's community avg rating/count in local state via a new `onRatingChange` callback, matching the modal's existing behavior — both entry points now keep stats in sync without a refetch.
+- `ProfilePage` now has a "Watch Later" section rendering the user's pinned/TODO items (via `todoService.getAllTodos`), with a remove action. Previously there was no way to see what you'd pinned.
+- Rewrote the "What is this?", "Is my data private?", and "Why does this exist?" FAQ answers on `HomePage`; added a new "Is it free?" FAQ item. Privacy answer now explicitly notes public profiles aren't implemented yet.
+- Removed the duplicated "Built by a backend dev..." quote from `HomePage` (it already lives in the footer).
+- Added a live GitHub star badge (`GitHubStarBadge`, fetches `api.github.com/repos/Zartof23/mytops`) to the header, and personal site / LinkedIn badges to the footer.
+
+**Why**: User-reported UX bugs and content gaps — see task list. Users had no visibility into their TODO/pinned items, ratings didn't visibly update after submission, and FAQ copy was outdated/inaccurate about privacy and project motivation.
+
+**Breaking**: None.
+
+**Files**: `frontend/src/components/LazyImage.tsx`, `ItemDetailModal.tsx`, `ItemCard.tsx`, `GitHubStarBadge.tsx` (new), `Layout.tsx`, `frontend/src/pages/TopicDetailPage.tsx`, `ProfilePage.tsx`, `HomePage.tsx`
+
+---
+
 ### [2026-04-24] Fix AI Enrichment Edge Function (Model Retirement + Parallel Tool Use)
 
 **What**: Restored the `ai-enrich-item` Edge Function, which had been silently returning HTTP 500 since 2026-01-15.

@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { profileService } from '../services/profileService'
+import { todoService } from '../services/todoService'
 import { StarRating } from '../components/StarRating'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,9 +15,9 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { SEO } from '@/components/SEO'
 import { PageTransition, StaggerContainer, StaggerItem, FadeIn } from '@/components/PageTransition'
-import { Share2, Star, Calendar } from 'lucide-react'
+import { Share2, Star, Calendar, Bookmark, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Item, Topic, Profile } from '@/types'
+import type { Item, Topic, Profile, UserTodoItem } from '@/types'
 
 interface RatingWithItem {
   id: string
@@ -92,6 +94,7 @@ export function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [ratingsByTopic, setRatingsByTopic] = useState<RatingsByTopic[]>([])
   const [topRated, setTopRated] = useState<RatingWithItem[]>([])
+  const [todos, setTodos] = useState<UserTodoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('')
 
@@ -119,8 +122,8 @@ export function ProfilePage() {
       if (!user) return
 
       try {
-        // Fetch profile and ratings in parallel
-        const [profileResult, ratingsResult] = await Promise.all([
+        // Fetch profile, ratings, and TODO list in parallel
+        const [profileResult, ratingsResult, todosResult] = await Promise.all([
           profileService.getCurrentProfile(),
           supabase
             .from('user_ratings')
@@ -132,7 +135,8 @@ export function ProfilePage() {
               )
             `)
             .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
+          todoService.getAllTodos()
         ])
 
         if (abortController.signal.aborted) return
@@ -140,6 +144,11 @@ export function ProfilePage() {
         // Set profile
         if (profileResult.data) {
           setProfile(profileResult.data)
+        }
+
+        // Set TODO list (flatten grouped map)
+        if (todosResult.data) {
+          setTodos(Array.from(todosResult.data.values()).flatMap(({ items }) => items))
         }
 
         // Handle ratings
@@ -206,6 +215,17 @@ export function ProfilePage() {
       abortController.abort()
     }
   }, [user])
+
+  const handleRemoveTodo = useCallback(async (itemId: string) => {
+    const previous = todos
+    setTodos((prev) => prev.filter((todo) => todo.item_id !== itemId))
+
+    const { error } = await todoService.removeFromTodo(itemId)
+    if (error) {
+      setTodos(previous)
+      toast.error("Couldn't remove from list.")
+    }
+  }, [todos])
 
   const handleShare = useCallback(async () => {
     if (!profile?.username) {
@@ -343,6 +363,56 @@ export function ProfilePage() {
                           />
                         ))}
                       </div>
+                    </Card>
+                  ))}
+                </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </div>
+          </FadeIn>
+        )}
+
+        {/* Watch Later / Pinned Items */}
+        {todos.length > 0 && (
+          <FadeIn delay={0.25}>
+            <div className="mb-8">
+              <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
+                <Bookmark className="h-4 w-4" />
+                Watch Later
+                <Badge variant="secondary" className="text-xs">
+                  {todos.length}
+                </Badge>
+              </h2>
+              <ScrollArea className="w-full whitespace-nowrap">
+                <div className="flex gap-3 pb-4">
+                  {todos.map((todo) => (
+                    <Card
+                      key={todo.id}
+                      className="relative inline-flex flex-col items-center p-4 min-w-[120px]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTodo(todo.item_id)}
+                        className="absolute top-1 right-1 p-1 rounded-full hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+                        aria-label={`Remove ${todo.item?.name || 'item'} from watch later`}
+                      >
+                        <X className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                      <span className="text-lg mb-1">
+                        {todo.topic?.icon || '📦'}
+                      </span>
+                      {todo.topic?.slug ? (
+                        <Link
+                          to={`/topics/${todo.topic.slug}`}
+                          className="text-xs font-medium text-center truncate max-w-[100px] hover:underline"
+                        >
+                          {todo.item?.name}
+                        </Link>
+                      ) : (
+                        <p className="text-xs font-medium text-center truncate max-w-[100px]">
+                          {todo.item?.name}
+                        </p>
+                      )}
                     </Card>
                   ))}
                 </div>

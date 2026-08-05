@@ -19,6 +19,8 @@ interface LazyImageProps {
   fetchPriority?: 'high' | 'low' | 'auto'
   /** Sizes attribute for responsive images */
   sizes?: string
+  /** How the image should fit its container (default: cover) */
+  objectFit?: 'cover' | 'contain'
   /** Function to call when image loads */
   onLoad?: () => void
   /** Function to call if image fails to load */
@@ -68,6 +70,7 @@ const LazyImageComponent = ({
   height,
   fetchPriority = 'auto',
   sizes,
+  objectFit = 'cover',
   onLoad,
   onError,
 }: LazyImageProps) => {
@@ -143,7 +146,8 @@ const LazyImageComponent = ({
           onLoad={handleLoad}
           onError={handleError}
           className={cn(
-            'w-full h-full object-cover transition-opacity duration-300',
+            'w-full h-full transition-opacity duration-300',
+            objectFit === 'contain' ? 'object-contain' : 'object-cover',
             isLoaded ? 'opacity-100' : 'opacity-0'
           )}
         />
@@ -177,6 +181,7 @@ export const LazyImage = memo(LazyImageComponent, (prevProps, nextProps) => {
     prevProps.width === nextProps.width &&
     prevProps.height === nextProps.height &&
     prevProps.fetchPriority === nextProps.fetchPriority &&
-    prevProps.sizes === nextProps.sizes
+    prevProps.sizes === nextProps.sizes &&
+    prevProps.objectFit === nextProps.objectFit
   )
 })

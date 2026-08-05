@@ -374,10 +374,73 @@ export function TopicDetailPage() {
     setIsModalOpen(true)
   }, [topic])
 
+  /**
+   * Update an item's community stats (avg rating / rating count) optimistically
+   * after a rating is added or changed, so the grid and modal reflect it immediately
+   * instead of waiting for a refetch.
+   */
+  const updateItemStats = useCallback((itemId: string, rating: number, previousRating: number | null) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId) return item
+
+      const currentAvg = item.avg_rating ?? 0
+      const currentCount = item.rating_count ?? 0
+
+      if (previousRating != null) {
+        // Existing rating changed: replace it in the average
+        const newAvg = currentCount > 0
+          ? (currentAvg * currentCount - previousRating + rating) / currentCount
+          : rating
+        return { ...item, avg_rating: newAvg, rating_count: currentCount }
+      }
+
+      // New rating: add it to the average
+      const newCount = currentCount + 1
+      const newAvg = (currentAvg * currentCount + rating) / newCount
+      return { ...item, avg_rating: newAvg, rating_count: newCount }
+    }))
+
+    setSelectedItem(prev => {
+      if (!prev || prev.id !== itemId) return prev
+
+      const currentAvg = prev.avg_rating ?? 0
+      const currentCount = prev.rating_count ?? 0
+
+      if (previousRating != null) {
+        const newAvg = currentCount > 0
+          ? (currentAvg * currentCount - previousRating + rating) / currentCount
+          : rating
+        return { ...prev, avg_rating: newAvg, rating_count: currentCount }
+      }
+
+      const newCount = currentCount + 1
+      const newAvg = (currentAvg * currentCount + rating) / newCount
+      return { ...prev, avg_rating: newAvg, rating_count: newCount }
+    })
+  }, [])
+
+  const handleCardRatingChange = useCallback((itemId: string, rating: number, previousRating: number | null) => {
+    setUserRatings(prev => {
+      const updated = new Map(prev)
+      updated.set(itemId, rating)
+      return updated
+    })
+
+    setTodoStatus(prev => {
+      if (!prev.has(itemId)) return prev
+      const updated = new Set(prev)
+      updated.delete(itemId)
+      return updated
+    })
+
+    updateItemStats(itemId, rating, previousRating)
+  }, [updateItemStats])
+
   const handleRatingChange = useCallback(async (rating: number) => {
     if (!selectedItem) return
 
     const itemId = selectedItem.id
+    const previousRating = userRatings.get(itemId) ?? null
 
     // Optimistic update
     setUserRatings(prev => {
@@ -410,8 +473,9 @@ export function TopicDetailPage() {
       toast.error("Couldn't save that. The database is judging you.")
     } else {
       toast.success('Noted. Your taste is... interesting.')
+      updateItemStats(itemId, rating, previousRating)
     }
-  }, [selectedItem])
+  }, [selectedItem, userRatings, updateItemStats])
 
   const handleAddToTodo = useCallback(async (itemId: string) => {
     if (!topic) return
@@ -617,6 +681,7 @@ export function TopicDetailPage() {
                       onAddToTodo={() => handleAddToTodo(item.id)}
                       onRemoveFromTodo={() => handleRemoveFromTodo(item.id)}
                       isUserDataLoading={loadingUserData}
+                      onRatingChange={(rating, previousRating) => handleCardRatingChange(item.id, rating, previousRating)}
                     />
                   </motion.div>
                 ))}

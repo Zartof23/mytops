@@ -251,9 +251,10 @@ export function HomePage() {
                 What is this?
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
-                You search. You rate. We remember. If something doesn't exist in our
-                database, AI creates it. No tracking, no recommendations you didn't
-                ask for. Just your favorites, beautifully organized.
+                A simple way to organize your favorites across different categories—movies,
+                books, games, and more. Search for something, rate it, and it's yours to
+                keep. If it doesn't exist in the database yet, AI looks it up and adds it
+                permanently, so it's there for you and everyone else next time.
               </AccordionContent>
             </AccordionItem>
 
@@ -273,9 +274,9 @@ export function HomePage() {
                 Is my data private?
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
-                Your ratings are private by default. You can choose to make your
-                profile public if you want to share your impeccable taste with the
-                world. I don't sell your data. I barely know SQL.
+                Your ratings are private by default. I don't sell your data. Making
+                your profile public so others can see your taste is planned but not
+                implemented yet—for now, everything you rate stays yours.
               </AccordionContent>
             </AccordionItem>
 
@@ -284,23 +285,27 @@ export function HomePage() {
                 Why does this exist?
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
-                I wanted to track my favorite anime and couldn't find anything
-                simple enough. So I built this. Yes, I'm a backend dev. Yes, this
-                frontend was painful. You're welcome.
+                I wanted a fully organized, private yet simple selection of my
+                favorites across many topics. Existing solutions didn't cover
+                everything I wanted, or missed unconventional and indie picks. So I
+                built an AI-powered solution that scrapes the web to add a permanent,
+                structured record to the database—available to the whole community.
+                An AI-generated database, essentially.
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="free">
+              <AccordionTrigger className="text-sm">
+                Is it free?
+              </AccordionTrigger>
+              <AccordionContent className="text-sm text-muted-foreground">
+                For you, yes. I cover the cost of the AI tokens for queries myself.
+                If you want to help out, even starring the project on GitHub goes a
+                long way.
               </AccordionContent>
             </AccordionItem>
           </Accordion>
         </motion.div>
-
-        {/* Footer Quote */}
-        <motion.p
-          className="text-center text-xs text-muted-foreground italic mt-10"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.5 }}
-        >
-          "Built by a backend dev who doesn't usually do frontend."
-        </motion.p>
       </div>
     </PageTransition>
   )
