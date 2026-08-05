@@ -16,6 +16,37 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-06] MVP 2 Complete: Removed Curated Seed Items, Dropped Source Badge
+
+**What**:
+- Marked MVP 2 (AI-powered database growth) complete in `README.md` and `docs/ROADMAP.md` — merged its delivered scope into "current state," moved MVP 3 up as next priority.
+- Deleted all 21 `source = 'seed'` rows from the production `items` table (cascaded to 10 dependent `user_ratings` and 6 `user_todo_lists` rows on those items). The database now contains only AI-generated items (8, at time of writing).
+- Removed the `SOURCE_BADGES` "Curated / AI Generated / User Submitted" badge from `ItemCard` and the equivalent source badge (plus `ai_confidence` display) from `ItemDetailModal`. With every item now AI-generated, the label was redundant.
+
+**Why**: User request — MVP 2 is done, seed/curated content no longer reflects the product (100% AI-populated database), so the "how was this added" badge stopped being useful information.
+
+**Breaking**: Existing user ratings/watch-later entries tied to the 21 deleted seed items are gone (cascade delete). No schema change; `items.source` still accepts `'seed'` for forward-compatibility but the app no longer writes or displays it specially.
+
+**Files**: `README.md`, `docs/ROADMAP.md`, `frontend/src/components/ItemCard.tsx`, `ItemCard.test.tsx`, `ItemDetailModal.tsx` — plus a one-off `DELETE FROM items WHERE source = 'seed'` run directly against production (not a migration, since it's data cleanup not schema).
+
+---
+
+### [2026-08-06] GitHub Badge Style, TODO Removal Toast, Rating Removal, Dead Watch-Later Link
+
+**What**:
+- `GitHubStarBadge` now matches the n8n-style badge: GitHub logo icon + raw star count only (no "Star" text, no star icon).
+- `ProfilePage`'s `handleRemoveTodo` now shows a success toast on successful removal; previously it only surfaced errors, so a successful removal produced no feedback at all.
+- Users can now remove an existing rating, not just change it. Added a remove ("X") control next to the star rating in both `ItemCard` (grid) and `ItemDetailModal`, wired to `ratingService.deleteRating`. `TopicDetailPage` recomputes community avg/count on removal (`removeItemStats`) and rolls back optimistic state on failure, mirroring the existing rate/add-to-todo pattern.
+- Removed the `Link` to `/topics/:slug` wrapping item names in the Profile page's "Watch Later" section — there's no item detail page at that route, so the link went nowhere useful. Item names are now plain text.
+
+**Why**: User-reported bugs — see task list. Silent TODO removal looked broken; ratings were a one-way action once submitted; the Watch Later link implied a destination that doesn't exist.
+
+**Breaking**: None.
+
+**Files**: `frontend/src/components/GitHubStarBadge.tsx`, `ItemCard.tsx`, `ItemDetailModal.tsx`, `frontend/src/pages/ProfilePage.tsx`, `TopicDetailPage.tsx`
+
+---
+
 ### [2026-08-05] Detail Dialog Image Crop, Rating View Sync, TODO List Surface, Homepage/Footer Content
 
 **What**:

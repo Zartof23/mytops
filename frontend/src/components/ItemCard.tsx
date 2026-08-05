@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Plus, Check } from 'lucide-react'
+import { Plus, Check, X } from 'lucide-react'
 import { LazyImage } from './LazyImage'
 
 const NEW_RELEASE_DAYS = 30
@@ -44,13 +44,9 @@ interface ItemCardProps {
   isUserDataLoading?: boolean
   /** Called after a rating is successfully saved, so parent state (e.g. community stats) can stay in sync */
   onRatingChange?: (rating: number, previousRating: number | null) => void
+  /** Called after a rating is successfully removed, so parent state (e.g. community stats) can stay in sync */
+  onRatingRemoved?: (previousRating: number) => void
 }
-
-const SOURCE_BADGES = {
-  seed: { label: 'Curated', variant: 'secondary' as const },
-  ai_generated: { label: 'AI', variant: 'outline' as const },
-  user_submitted: { label: 'User', variant: 'default' as const }
-} as const
 
 /**
  * Check if item is a "new" release (within last 30 days or current year).
@@ -131,7 +127,8 @@ const ItemCardComponent = ({
   onAddToTodo,
   onRemoveFromTodo,
   isUserDataLoading = false,
-  onRatingChange
+  onRatingChange,
+  onRatingRemoved
 }: ItemCardProps) => {
   const { user } = useAuthStore()
   const [userRating, setUserRating] = useState<number | null>(
@@ -142,10 +139,6 @@ const ItemCardComponent = ({
   const lastFetchedItemId = useRef<string | null>(null)
 
   // Memoize computed values
-  const badge = useMemo(
-    () => (item.source ? SOURCE_BADGES[item.source] : null),
-    [item.source]
-  )
   const showCommunityStats = useMemo(
     () => avgRating !== undefined && ratingCount !== undefined && ratingCount > 0,
     [avgRating, ratingCount]
@@ -210,6 +203,30 @@ const ItemCardComponent = ({
     setIsLoading(false)
   }, [user, userRating, item.id, onRatingChange])
 
+  const handleRemoveRating = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!user || userRating == null) return
+
+    setIsLoading(true)
+    const previousRating = userRating
+
+    // Optimistic update
+    setUserRating(null)
+
+    const { error } = await ratingService.deleteRating(item.id)
+
+    if (error) {
+      // Rollback on error
+      setUserRating(previousRating)
+      toast.error("Couldn't remove that. Try again?")
+    } else {
+      toast.success('Rating removed.')
+      onRatingRemoved?.(previousRating)
+    }
+
+    setIsLoading(false)
+  }, [user, userRating, item.id, onRatingRemoved])
+
   const handleCardClick = useCallback(() => {
     onClick?.()
   }, [onClick])
@@ -259,11 +276,6 @@ const ItemCardComponent = ({
             New
           </Badge>
         )}
-        {badge && (
-          <Badge variant={badge.variant} className="text-[10px] px-1.5 py-0">
-            {badge.label}
-          </Badge>
-        )}
       </div>
 
       {/* Content positioned at bottom */}
@@ -294,13 +306,27 @@ const ItemCardComponent = ({
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
-                  <StarRating
-                    value={userRating}
-                    onChange={user ? handleRatingChange : undefined}
-                    disabled={isLoading}
-                    size="sm"
-                    readOnly={!user}
-                  />
+                  <div className="flex items-center gap-1">
+                    <StarRating
+                      value={userRating}
+                      onChange={user ? handleRatingChange : undefined}
+                      disabled={isLoading}
+                      size="sm"
+                      readOnly={!user}
+                    />
+                    {user && userRating != null && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={handleRemoveRating}
+                        disabled={isLoading}
+                        aria-label="Remove your rating"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                   {/* TODO list button - show if user is logged in and hasn't rated */}
                   {user && !userRating && onAddToTodo && (
                     <Tooltip>
@@ -417,6 +443,7 @@ export const ItemCard = memo(ItemCardComponent, (prevProps, nextProps) => {
     prevProps.onClick === nextProps.onClick &&
     prevProps.onAddToTodo === nextProps.onAddToTodo &&
     prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo &&
-    prevProps.onRatingChange === nextProps.onRatingChange
+    prevProps.onRatingChange === nextProps.onRatingChange &&
+    prevProps.onRatingRemoved === nextProps.onRatingRemoved
   )
 })

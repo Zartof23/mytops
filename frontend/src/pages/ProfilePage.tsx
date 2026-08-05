@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
@@ -224,6 +223,8 @@ export function ProfilePage() {
     if (error) {
       setTodos(previous)
       toast.error("Couldn't remove from list.")
+    } else {
+      toast.success('Removed from your list.')
     }
   }, [todos])
 
@@ -401,18 +402,9 @@ export function ProfilePage() {
                       <span className="text-lg mb-1">
                         {todo.topic?.icon || '📦'}
                       </span>
-                      {todo.topic?.slug ? (
-                        <Link
-                          to={`/topics/${todo.topic.slug}`}
-                          className="text-xs font-medium text-center truncate max-w-[100px] hover:underline"
-                        >
-                          {todo.item?.name}
-                        </Link>
-                      ) : (
-                        <p className="text-xs font-medium text-center truncate max-w-[100px]">
-                          {todo.item?.name}
-                        </p>
-                      )}
+                      <p className="text-xs font-medium text-center truncate max-w-[100px]">
+                        {todo.item?.name}
+                      </p>
                     </Card>
                   ))}
                 </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Star } from 'lucide-react'
+import { Github } from 'lucide-react'
 
 const REPO = 'Zartof23/mytops'
 const REPO_URL = `https://github.com/${REPO}`
@@ -45,10 +45,9 @@ export function GitHubStarBadge() {
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-      aria-label={stars !== null ? `Star mytops on GitHub - ${stars} stars` : 'Star mytops on GitHub'}
+      aria-label={stars !== null ? `mytops on GitHub - ${stars} stars` : 'mytops on GitHub'}
     >
-      <Star className="h-3.5 w-3.5" aria-hidden="true" />
-      <span>Star</span>
+      <Github className="h-3.5 w-3.5" aria-hidden="true" />
       {stars !== null && (
         <span className="text-muted-foreground">{stars}</span>
       )}

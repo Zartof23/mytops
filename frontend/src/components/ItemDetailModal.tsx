@@ -1,11 +1,10 @@
 import { memo, useCallback, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
 import { LazyImage } from './LazyImage'
-import { Plus, Check } from 'lucide-react'
+import { Plus, Check, X } from 'lucide-react'
 import type { Item, Topic } from '@/types'
 
 interface ItemDetailModalProps {
@@ -16,6 +15,7 @@ interface ItemDetailModalProps {
   ratingCount?: number
   userRating?: number | null
   onRatingChange?: (rating: number) => void
+  onRemoveRating?: () => void
   isInTodo?: boolean
   onAddToTodo?: () => void
   onRemoveFromTodo?: () => void
@@ -121,6 +121,7 @@ const ItemDetailModalComponent = ({
   ratingCount,
   userRating,
   onRatingChange,
+  onRemoveRating,
   isInTodo = false,
   onAddToTodo,
   onRemoveFromTodo,
@@ -190,29 +191,6 @@ const ItemDetailModalComponent = ({
           </>
         )}
 
-        {/* Source badge */}
-        {item.source && (
-          <div className="flex items-center gap-2">
-            <Badge
-              variant={
-                item.source === 'seed' ? 'secondary' :
-                item.source === 'ai_generated' ? 'outline' :
-                'default'
-              }
-              className="text-xs"
-            >
-              {item.source === 'seed' ? 'Curated' :
-               item.source === 'ai_generated' ? 'AI Generated' :
-               'User Submitted'}
-            </Badge>
-            {item.ai_confidence && (
-              <span className="text-xs text-muted-foreground">
-                {Math.round(item.ai_confidence * 100)}% confidence
-              </span>
-            )}
-          </div>
-        )}
-
         <Separator />
 
         {/* Rating section */}
@@ -222,11 +200,24 @@ const ItemDetailModalComponent = ({
             <div>
               <p className="text-xs text-muted-foreground mb-1">Your Rating</p>
               {isAuthenticated ? (
-                <StarRating
-                  value={userRating ?? null}
-                  onChange={onRatingChange}
-                  size="md"
-                />
+                <div className="flex items-center gap-2">
+                  <StarRating
+                    value={userRating ?? null}
+                    onChange={onRatingChange}
+                    size="md"
+                  />
+                  {userRating != null && onRemoveRating && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={onRemoveRating}
+                      aria-label="Remove your rating"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground italic">
                   Sign in to rate
@@ -289,6 +280,7 @@ export const ItemDetailModal = memo(ItemDetailModalComponent, (prevProps, nextPr
     prevProps.isAuthenticated === nextProps.isAuthenticated &&
     prevProps.onOpenChange === nextProps.onOpenChange &&
     prevProps.onRatingChange === nextProps.onRatingChange &&
+    prevProps.onRemoveRating === nextProps.onRemoveRating &&
     prevProps.onAddToTodo === nextProps.onAddToTodo &&
     prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo
   )

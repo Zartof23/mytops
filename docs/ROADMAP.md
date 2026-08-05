@@ -4,7 +4,7 @@ This document outlines the current capabilities and future development plans for
 
 ---
 
-## Current State (MVP 1 - COMPLETED)
+## Current State (MVP 1 + MVP 2 - COMPLETED)
 
 ### What Users Can Do Now
 
@@ -38,26 +38,34 @@ This document outlines the current capabilities and future development plans for
    - View personal profile page
    - See all rated items organized by topic
    - View rating history
+   - Manage "Watch Later" list (add/remove items)
    - Responsive design (mobile, tablet, desktop)
+
+5. **AI-Powered Database Growth**
+   - Search for movies, books, games, etc. that don't exist in the database yet
+   - Request AI enrichment for items not found
+   - AI (Claude API + Tavily web search) generates rich metadata (title, description, genre, release date, image URL, etc.) and inserts the item into the database
+   - Every search for a new item contributes to the database for all users
+   - Loading state and toast feedback during enrichment; automatic redirect to the newly created item
+   - The database is now fully AI-generated — all pre-seeded/curated items have been removed
 
 #### Technical Features Delivered
 
 - **Authentication**: Full Supabase Auth integration (Email + Google + GitHub OAuth)
 - **Database**: PostgreSQL via Supabase with RLS on all tables
+- **AI Enrichment**: `ai-enrich-item` Edge Function using Claude API (tool use + web search via Tavily) to generate and insert new items on demand
 - **UI/UX**:
   - shadcn/ui component library (new-york style, neutral monochrome palette)
   - Dark/light mode with system preference detection
   - Responsive, mobile-first design
   - Accessible (keyboard navigation, screen reader support)
-- **Testing**: 50+ tests across components, services, and pages
+- **Testing**: 100+ tests across components, services, and pages
 - **Deployment**: Production site at https://mytops.io (Cloudflare Pages)
 - **State Management**: Zustand for global state
 - **Error Handling**: Toast notifications with brand voice
 
 #### Current Limitations
 
-- **No AI enrichment**: Database has only pre-seeded items (20+ items)
-- **No dynamic item creation**: Users can't add items not in database
 - **No recommendations**: No personalized suggestions
 - **Static topics**: Users can't create custom topics
 - **No social features**: No public sharing, follows, or lists
@@ -67,79 +75,7 @@ This document outlines the current capabilities and future development plans for
 
 ## Future MVPs
 
-### MVP 2: AI-Powered Database Growth (Next Priority)
-
-**Vision:** Transform from a static database to a self-building, AI-powered database that grows organically as users search for new items.
-
-#### What Users Will Be Able to Do
-
-1. **Search for Any Item**
-   - Search for movies, books, games, etc. that don't exist in database yet
-   - If item not found, request AI enrichment
-   - AI automatically generates rich metadata (title, description, genre, release date, image URL, etc.)
-   - Item appears in database for all users
-
-2. **Community-Driven Database Expansion**
-   - Every search for a new item contributes to the database
-   - Users benefit from others' searches
-   - Database grows organically based on user interest
-
-3. **AI Enrichment Feedback**
-   - See when an item is being enriched ("AI is thinking...")
-   - Get notified when enrichment completes
-   - Automatic redirect to newly created item
-
-#### Technical Requirements
-
-**Edge Functions:**
-- `ai-enrich-item`: Endpoint for triggering AI enrichment
-  - Input: item name, topic
-  - Output: enriched item data (title, description, metadata)
-  - Uses Claude API for metadata generation
-  - Validates and structures response
-  - Inserts into database
-
-**Database:**
-- `ai_enrichment_queue` table (already exists)
-  - Track pending enrichment requests
-  - Prevent duplicate requests
-  - Store enrichment status (pending, in_progress, completed, failed)
-
-**Background Jobs:**
-- pg_cron job to process enrichment queue
-- Batch processing for efficiency
-- Error handling and retry logic
-
-**Frontend:**
-- "Item not found" UI with "Request AI enrichment" button
-- Loading states during enrichment
-- Toast notifications on completion/failure
-
-**AI Integration:**
-- Claude API integration (Anthropic)
-- Prompt engineering for metadata extraction
-- Fallback for API failures
-- Rate limiting and cost management
-
-#### Implementation Steps
-
-1. Create `ai-enrich-item` Edge Function
-2. Update `ai_enrichment_queue` table schema
-3. Create pg_cron job for queue processing
-4. Build frontend UI for enrichment flow
-5. Test end-to-end flow
-6. Deploy and monitor
-
-#### Success Metrics
-
-- Number of items enriched per day
-- AI enrichment success rate
-- User satisfaction with AI-generated metadata
-- Database growth rate
-
----
-
-### MVP 3: Recommendations & Profile Monetization
+### MVP 3: Recommendations & Profile Monetization (Next Priority)
 
 **Vision:** Provide personalized recommendations based on user preferences and introduce monetization via profile customization.
 
@@ -347,8 +283,9 @@ Features are prioritized based on:
 
 - **2025-01-03**: Created roadmap document with clear MVP breakdown
 - **MVP 1**: Completed core authentication, rating, and profile features
-- **Next**: MVP 2 (AI-powered database growth) is the priority
+- **2026-08-06**: MVP 2 (AI-powered database growth) completed — all pre-seeded/curated items removed from production, database is now 100% AI-generated
+- **Next**: MVP 3 (recommendations & profile monetization) is the priority
 
 ---
 
-**Last updated:** 2025-01-03
+**Last updated:** 2026-08-06

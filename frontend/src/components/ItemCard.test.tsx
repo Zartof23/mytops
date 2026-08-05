@@ -26,7 +26,7 @@ const mockItem: Item = {
   description: 'A great test movie',
   metadata: null,
   image_url: null,
-  source: 'seed',
+  source: 'ai_generated',
   ai_confidence: null,
   created_by: null,
   created_at: '2025-01-01T00:00:00Z',
@@ -55,11 +55,6 @@ describe('ItemCard', () => {
     it('should render item description', () => {
       render(<ItemCard item={mockItem} />)
       expect(screen.getByText('A great test movie')).toBeInTheDocument()
-    })
-
-    it('should render source badge', () => {
-      render(<ItemCard item={mockItem} />)
-      expect(screen.getByText('Curated')).toBeInTheDocument()
     })
 
     it('should render image when image_url is provided', async () => {

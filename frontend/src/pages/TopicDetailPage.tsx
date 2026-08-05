@@ -436,6 +436,37 @@ export function TopicDetailPage() {
     updateItemStats(itemId, rating, previousRating)
   }, [updateItemStats])
 
+  /**
+   * Update an item's community stats after a rating is removed.
+   */
+  const removeItemStats = useCallback((itemId: string, removedRating: number) => {
+    const recompute = (avg: number, count: number) => {
+      const newCount = Math.max(count - 1, 0)
+      const newAvg = newCount > 0 ? (avg * count - removedRating) / newCount : 0
+      return { avg_rating: newAvg, rating_count: newCount }
+    }
+
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId) return item
+      return { ...item, ...recompute(item.avg_rating ?? 0, item.rating_count ?? 0) }
+    }))
+
+    setSelectedItem(prev => {
+      if (!prev || prev.id !== itemId) return prev
+      return { ...prev, ...recompute(prev.avg_rating ?? 0, prev.rating_count ?? 0) }
+    })
+  }, [])
+
+  const handleCardRatingRemoved = useCallback((itemId: string, previousRating: number) => {
+    setUserRatings(prev => {
+      const updated = new Map(prev)
+      updated.delete(itemId)
+      return updated
+    })
+
+    removeItemStats(itemId, previousRating)
+  }, [removeItemStats])
+
   const handleRatingChange = useCallback(async (rating: number) => {
     if (!selectedItem) return
 
@@ -476,6 +507,36 @@ export function TopicDetailPage() {
       updateItemStats(itemId, rating, previousRating)
     }
   }, [selectedItem, userRatings, updateItemStats])
+
+  const handleRemoveRating = useCallback(async () => {
+    if (!selectedItem) return
+
+    const itemId = selectedItem.id
+    const previousRating = userRatings.get(itemId) ?? null
+    if (previousRating == null) return
+
+    // Optimistic update
+    setUserRatings(prev => {
+      const updated = new Map(prev)
+      updated.delete(itemId)
+      return updated
+    })
+
+    const { error: ratingError } = await ratingService.deleteRating(itemId)
+
+    if (ratingError) {
+      // Rollback on error
+      setUserRatings(prev => {
+        const rollback = new Map(prev)
+        rollback.set(itemId, previousRating)
+        return rollback
+      })
+      toast.error("Couldn't remove that. Try again?")
+    } else {
+      toast.success('Rating removed.')
+      removeItemStats(itemId, previousRating)
+    }
+  }, [selectedItem, userRatings, removeItemStats])
 
   const handleAddToTodo = useCallback(async (itemId: string) => {
     if (!topic) return
@@ -682,6 +743,7 @@ export function TopicDetailPage() {
                       onRemoveFromTodo={() => handleRemoveFromTodo(item.id)}
                       isUserDataLoading={loadingUserData}
                       onRatingChange={(rating, previousRating) => handleCardRatingChange(item.id, rating, previousRating)}
+                      onRatingRemoved={(previousRating) => handleCardRatingRemoved(item.id, previousRating)}
                     />
                   </motion.div>
                 ))}
@@ -750,6 +812,7 @@ export function TopicDetailPage() {
         ratingCount={selectedItem?.rating_count}
         userRating={selectedItem ? userRatings.get(selectedItem.id) ?? null : null}
         onRatingChange={handleRatingChange}
+        onRemoveRating={handleRemoveRating}
         isInTodo={selectedItem ? todoStatus.has(selectedItem.id) : false}
         onAddToTodo={selectedItem ? () => handleAddToTodo(selectedItem.id) : undefined}
         onRemoveFromTodo={selectedItem ? () => handleRemoveFromTodo(selectedItem.id) : undefined}

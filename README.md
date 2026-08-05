@@ -4,7 +4,7 @@
 
 **Live site:** https://mytops.io
 
-## What You Can Do Now (MVP 1)
+## What You Can Do Now (MVP 1 + MVP 2)
 
 ### Working Features
 
@@ -17,21 +17,26 @@
    - View items with rich metadata (title, description, images, topic-specific details)
    - Search within topics (real-time filtering)
 
-3. **Rate & Curate**
+3. **AI-Powered Database Growth**
+   - Search for anything — if it's not in the database yet, request AI enrichment
+   - Claude API + Tavily web search generate the item's metadata (description, images, topic-specific fields)
+   - The item is added to the database immediately for every user to find
+   - The database is now 100% AI-generated; there are no pre-seeded/curated items left
+
+4. **Rate & Curate**
    - Rate items 1-5 stars
    - Build your personal "preferables" collection
    - Update or remove ratings
+   - Add/remove items from your "Watch Later" list
    - Optimistic UI updates with rollback on error
 
-4. **Profile**
+5. **Profile**
    - View your rated items organized by topic
    - Responsive design (mobile-first)
    - Dark/light mode
 
 ### Current Limitations
 
-- **No AI enrichment yet**: You can only browse pre-seeded items (~20 items across topics)
-- **No dynamic item creation**: AI-powered database growth coming in MVP 2
 - **No recommendations**: Personalized suggestions coming in MVP 3
 - **No social features**: Sharing and following coming in MVP 4
 
@@ -39,7 +44,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for upcoming features.
 
 ## The Vision
 
-**mytops** will eventually build its database on demand. When you search for something that doesn't exist, AI will automatically generate the entry and add it to the database. This feature is planned for MVP 2.
+**mytops** builds its database on demand. When you search for something that doesn't exist, AI automatically generates the entry and adds it to the database — no manual curation required.
 
 ## The Vibe
 
@@ -55,7 +60,7 @@ This app embraces a minimal, honest design with self-deprecating humor. No dark 
 | **Auth** | Supabase Auth (Email + Google + GitHub) |
 | **Backend** | Supabase Edge Functions (Deno) |
 | **Background Jobs** | pg_cron + pg_net |
-| **AI** | Claude API (Anthropic) - coming in MVP 2 |
+| **AI** | Claude API (Anthropic) + Tavily Search |
 | **Frontend** | React 19 + TypeScript + Vite |
 | **Styling** | Tailwind CSS + shadcn/ui (new-york, neutral) |
 | **State** | Zustand |
@@ -168,7 +173,8 @@ mytops/
 ### Edge Function Secrets
 
 Set in Supabase Dashboard (not in code):
-- `ANTHROPIC_API_KEY` (for AI enrichment in MVP 2)
+- `ANTHROPIC_API_KEY` (for AI item enrichment)
+- Tavily API key (for web search during enrichment)
 
 ## Contributing
 
