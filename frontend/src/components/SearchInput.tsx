@@ -1,0 +1,132 @@
+import { useCallback, useId } from 'react'
+import { Search, Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import type { Topic } from '@/types'
+
+export interface SearchInputProps {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  /** Accessible name for the input. */
+  ariaLabel: string
+  /** Shows an inline spinner with a polite live region. */
+  isSearching?: boolean
+  /** Scope chips. Omit entirely to hide the chip row. */
+  topics?: Topic[]
+  /** Currently selected scope. `null` means "all topics". */
+  activeTopicId?: string | null
+  onTopicChange?: (topicId: string | null) => void
+  /** Extra classes for the wrapping element. */
+  className?: string
+  /** Larger styling for the home page hero. */
+  size?: 'default' | 'hero'
+}
+
+const CHIP_BASE =
+  'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary'
+
+/**
+ * Presentational search field with an optional topic scope chip row.
+ *
+ * Holds no query state and performs no fetching — the parent owns both. This is
+ * what lets the home page (dropdown results) and the topic page (paginated grid)
+ * share one input without sharing a results pipeline.
+ */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  isSearching = false,
+  topics,
+  activeTopicId = null,
+  onTopicChange,
+  className = '',
+  size = 'default'
+}: SearchInputProps) {
+  const inputId = useId()
+
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange(event.target.value)
+    },
+    [onChange]
+  )
+
+  const showChips = Boolean(topics && topics.length > 0 && onTopicChange)
+
+  return (
+    <div className={className}>
+      <div className="relative">
+        <label htmlFor={inputId} className="sr-only">
+          {ariaLabel}
+        </label>
+        <Search
+          className={`absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground ${
+            size === 'hero' ? 'h-5 w-5' : 'h-4 w-4'
+          }`}
+          aria-hidden="true"
+        />
+        <Input
+          id={inputId}
+          type="text"
+          autoComplete="off"
+          placeholder={placeholder}
+          value={value}
+          onChange={handleChange}
+          aria-label={ariaLabel}
+          className={size === 'hero' ? 'h-14 pl-11 text-base' : 'h-10 pl-9'}
+        />
+        {isSearching && (
+          <span
+            className="absolute right-3 top-1/2 -translate-y-1/2"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+            <span className="sr-only">Searching...</span>
+          </span>
+        )}
+      </div>
+
+      {showChips && (
+        <div
+          role="group"
+          aria-label="Search scope"
+          className="mt-3 flex flex-wrap justify-center gap-2"
+        >
+          <button
+            type="button"
+            onClick={() => onTopicChange?.(null)}
+            aria-pressed={activeTopicId === null}
+            aria-label="Search all topics"
+            className={`${CHIP_BASE} ${
+              activeTopicId === null
+                ? 'bg-foreground text-background border-foreground'
+                : 'hover:bg-muted'
+            }`}
+          >
+            All
+          </button>
+          {topics?.map((topic) => (
+            <button
+              key={topic.id}
+              type="button"
+              onClick={() => onTopicChange?.(topic.id)}
+              aria-pressed={activeTopicId === topic.id}
+              aria-label={`Search ${topic.name} only`}
+              className={`${CHIP_BASE} ${
+                activeTopicId === topic.id
+                  ? 'bg-foreground text-background border-foreground'
+                  : 'hover:bg-muted'
+              }`}
+            >
+              {topic.icon && <span aria-hidden="true">{topic.icon}</span>}
+              {topic.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
