@@ -23,12 +23,17 @@ export const MIN_QUERY_LENGTH = 2
 const DEFAULT_LIMIT = 8
 
 /**
- * Neutralise characters that carry meaning inside a PostgREST `or` filter.
- * Commas separate conditions and `%` is the wildcard, so a raw user query
- * containing either would change the shape of the request.
+ * Escape special characters for use in PostgREST ilike with double-quoted values.
+ * In double quotes, `%` and `_` are wildcards and must be backslash-escaped to match literally.
+ * Backslash and double-quote themselves must also be escaped.
+ * Escaping order matters: escape backslash first to avoid double-escaping.
  */
-function sanitizeForIlike(query: string): string {
-  return query.replace(/[,%()]/g, ' ')
+function escapeForIlike(query: string): string {
+  return query
+    .replace(/\\/g, '\\\\')  // \ -> \\
+    .replace(/"/g, '\\"')    // " -> \"
+    .replace(/%/g, '\\%')    // % -> \%
+    .replace(/_/g, '\\_')    // _ -> \_
 }
 
 /**
@@ -52,7 +57,8 @@ export const searchService = {
     }
 
     try {
-      const pattern = `%${sanitizeForIlike(trimmed)}%`
+      const escaped = escapeForIlike(trimmed)
+      const pattern = `"%${escaped}%"`
 
       let request = supabase
         .from('items')

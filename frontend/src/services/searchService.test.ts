@@ -50,18 +50,58 @@ describe('searchService', () => {
 
       expect(supabase.from).toHaveBeenCalledWith('items')
       expect(chain.select).toHaveBeenCalledWith('*, topic:topics(*)')
-      expect(chain.or).toHaveBeenCalledWith('name.ilike.%Dune%,description.ilike.%Dune%')
+      expect(chain.or).toHaveBeenCalledWith('name.ilike."%Dune%",description.ilike."%Dune%"')
       expect(result.data).toEqual(items)
       expect(result.error).toBeNull()
     })
 
-    it('escapes commas and percent signs in the query', async () => {
+    it('preserves parentheses and hyphens inside quoted values', async () => {
       const chain = mockQuery({ data: [], error: null })
 
-      await searchService.searchItems({ query: 'a,b%c' })
+      await searchService.searchItems({ query: 'Sci-Fi (2020)' })
 
       expect(chain.or).toHaveBeenCalledWith(
-        'name.ilike.%a b c%,description.ilike.%a b c%'
+        'name.ilike."%Sci-Fi (2020)%",description.ilike."%Sci-Fi (2020)%"'
+      )
+    })
+
+    it('preserves commas inside quoted values', async () => {
+      const chain = mockQuery({ data: [], error: null })
+
+      await searchService.searchItems({ query: 'a,b' })
+
+      expect(chain.or).toHaveBeenCalledWith(
+        'name.ilike."%a,b%",description.ilike."%a,b%"'
+      )
+    })
+
+    it('escapes percent signs as wildcards inside quoted values', async () => {
+      const chain = mockQuery({ data: [], error: null })
+
+      await searchService.searchItems({ query: '100%' })
+
+      expect(chain.or).toHaveBeenCalledWith(
+        'name.ilike."%100\\%%",description.ilike."%100\\%%"'
+      )
+    })
+
+    it('escapes underscores as wildcards inside quoted values', async () => {
+      const chain = mockQuery({ data: [], error: null })
+
+      await searchService.searchItems({ query: 'a_b' })
+
+      expect(chain.or).toHaveBeenCalledWith(
+        'name.ilike."%a\\_b%",description.ilike."%a\\_b%"'
+      )
+    })
+
+    it('escapes double quotes inside quoted values', async () => {
+      const chain = mockQuery({ data: [], error: null })
+
+      await searchService.searchItems({ query: 'a"b' })
+
+      expect(chain.or).toHaveBeenCalledWith(
+        'name.ilike."%a\\"b%",description.ilike."%a\\"b%"'
       )
     })
 
