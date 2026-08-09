@@ -44,55 +44,73 @@ search, and the user dashboard restyle.
 
 ## Architecture
 
-### New: `frontend/src/components/ItemSearch.tsx`
+### New: `SearchInput.tsx` and `ItemSearch.tsx`
 
 `TopicDetailPage.tsx` is 825 lines and inlines debouncing, querying, empty-state
-selection, and the enrichment trigger. Both pages now need that behavior, so it
-moves into one component with a single job: **take a query and a topic scope,
-render matches, and offer AI enrichment when there are none.**
+selection, and the enrichment trigger. But the two pages need *different* result
+surfaces: the topic page drives a filtered, paginated grid through
+`statsService.getFilteredItems` (an RPC that requires a `topic_id`), while the
+home page needs a lightweight cross-topic dropdown. Forcing one component to do
+both would mean rebuilding the topic page's grid pipeline — high risk, no gain.
+
+So the extraction splits along the real seam:
+
+**`SearchInput.tsx`** — presentational, shared by both pages. Owns the input, the
+search icon, the inline spinner, the `sr-only` label, and the optional topic chip
+row. Fully controlled; holds no query state of its own.
 
 ```ts
-interface ItemSearchProps {
-  /** Locks search to one topic (topic pages). Undefined = user-selectable scope. */
-  topicId?: string
-  /** Show the all/per-topic chip row. False on topic pages. */
-  showTopicChips?: boolean
-  /** Rendered when the query is empty. */
-  placeholder?: string
-  onSelectItem: (item: ItemWithStats) => void
+interface SearchInputProps {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  ariaLabel: string
+  isSearching?: boolean
+  /** Chip row. Omit entirely on topic pages. */
+  topics?: Topic[]
+  activeTopicId?: string | null      // null = "all"
+  onTopicChange?: (topicId: string | null) => void
 }
 ```
 
-Responsibilities it owns: the input, the debounce (`useDebouncedValue`, existing
-300ms constant), calling `searchService.searchItems`, the results dropdown, the
-topic chip row, empty/loading states, and the enrichment flow.
+**`ItemSearch.tsx`** — home-page-only. Composes `SearchInput` with the debounce
+(`useDebouncedValue`, existing 300ms constant), `searchService.searchItems`, the
+results dropdown with keyboard navigation, and the enrichment flow including the
+"which topic is it?" step. It does **not** own what happens when an item is
+picked — it calls `onSelectItem` and the parent opens the modal.
 
-Responsibilities it does **not** own: what happens when an item is picked. The
-parent decides — both current parents open `ItemDetailModal`, but the component
-does not know that.
-
-`TopicDetailPage` keeps its own concerns (filters, pagination, the item grid,
-TODO list) and delegates only the search box. Its inline search state, debounce,
-`getEmptyStateConfig`, and `shouldShowEnrichment` helpers move into `ItemSearch`
-or its test file and are deleted from the page.
+`TopicDetailPage` swaps only its search-input JSX for `<SearchInput>`. Its state,
+filters, pagination, grid, TODO list, `getEmptyStateConfig` and
+`shouldShowEnrichment` all stay exactly where they are. Behavior there is
+unchanged, which is the point: the risky rewrite is avoided.
 
 ### New: `frontend/src/services/searchService.ts`
 
 ```ts
+type SearchResultItem = Item & { topic: Topic }
+
 searchItems(params: {
   query: string
   topicId?: string
   limit?: number            // default 8
   metadataFilters?: Record<string, unknown>  // Phase-future, ignored for now
-}): Promise<{ data: ItemWithStats[]; error: Error | null }>
+}): Promise<{ data: SearchResultItem[]; error: Error | null }>
+
+listTopics(): Promise<{ data: Topic[]; error: Error | null }>
 ```
 
-Queries `items` joined to `topics`, name/description ILIKE match, ordered by
-rating count then name. `metadataFilters` is accepted and ignored in this phase so
-that adding metadata search later does not change the call signature at any call
-site.
+`searchItems` uses a direct PostgREST query on `items` with an embedded `topics`
+join and an `or(name.ilike, description.ilike)` filter — **not** the existing
+`get_items_with_stats` RPC, which requires a `topic_id` and therefore cannot
+search across topics. That keeps Phase 1 entirely frontend-side with no
+migration.
 
-Results carry their topic so the dropdown can group by it.
+Results carry their topic so the dropdown can group by it. They do not carry
+rating stats; the home page fetches those via the existing
+`statsService.getItemStats` for the single item being opened in the modal.
+
+`metadataFilters` is accepted and ignored in this phase so that adding metadata
+search later does not change the call signature at any call site.
 
 ### Rewritten: `frontend/src/pages/HomePage.tsx`
 
@@ -189,6 +207,8 @@ Keyboard: arrow keys move through results, Enter selects the highlighted one,
 
 - `searchService.test.ts` — query building with and without `topicId`, limit,
   error propagation, `metadataFilters` accepted and ignored.
+- `SearchInput.test.tsx` — controlled value, chip row rendering and selection,
+  spinner visibility, a11y label.
 - `ItemSearch.test.tsx` — debounce, dropdown open/close, grouping, keyboard
   navigation, and each row of the search-behavior table above.
 - `FaqSection.test.tsx` — five bands render in the specified order, alternation
@@ -201,9 +221,13 @@ Keyboard: arrow keys move through results, Enter selects the highlighted one,
 
 ## Risks
 
-- **Regression in topic-page search.** The extraction is the riskiest change here.
-  Mitigation: port the existing empty-state logic verbatim into `ItemSearch`
-  along with its tests before changing any behavior.
+- **Regression in topic-page search.** Mitigated by keeping the topic page's
+  entire search pipeline in place and swapping only its presentational input for
+  `<SearchInput>`. Its existing tests must pass unmodified.
+- **Two search paths.** The home page (PostgREST, no stats) and the topic page
+  (RPC, with stats) query differently, so ranking can differ between them.
+  Accepted for Phase 1; a unified cross-topic stats RPC is the natural cleanup
+  if it becomes visible.
 - **Perceived feature loss.** The carousel was the only social-proof signal on the
   home page. Accepted: search-first is the point, and popular items remain
   reachable through topic pages.
