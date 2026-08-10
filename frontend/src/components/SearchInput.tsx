@@ -122,7 +122,6 @@ export function SearchInput({
               }`}
             >
               {topic.icon && <span aria-hidden="true">{topic.icon}</span>}
-              {topic.name}
             </button>
           ))}
         </div>
