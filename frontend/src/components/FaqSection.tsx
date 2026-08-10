@@ -98,13 +98,17 @@ export function FaqSection() {
               data-align={align}
               className={`flex ${align === 'left' ? 'justify-start' : 'justify-end'}`}
               initial={prefersReducedMotion ? false : { opacity: 0, x: align === 'left' ? -40 : 40 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, amount: 0.4 }}
-              transition={{ duration: 0.5 }}
+              {...(!prefersReducedMotion && {
+                whileInView: { opacity: 1, x: 0 },
+                viewport: { once: true, amount: 0.4 },
+                transition: { duration: 0.5 }
+              })}
             >
               <div
-                className={`w-full max-w-xl border-l-2 border-foreground/20 pl-6 ${
-                  align === 'right' ? 'text-right border-l-0 border-r-2 pl-0 pr-6' : ''
+                className={`w-full max-w-xl ${
+                  align === 'left'
+                    ? 'border-l-2 border-foreground/20 pl-6'
+                    : 'text-right border-r-2 border-foreground/20 pr-6'
                 }`}
               >
                 <h3 className="mb-3 text-2xl font-bold tracking-tight">{band.question}</h3>

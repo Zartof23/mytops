@@ -1,13 +1,21 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '../test/utils'
 import { FaqSection, FAQ_ANCHOR_ID } from './FaqSection'
 
+const framerMotionMock = { prefersReduced: true }
+
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion')
-  return { ...actual, useReducedMotion: () => true }
+  return {
+    ...actual,
+    useReducedMotion: () => framerMotionMock.prefersReduced
+  }
 })
 
-describe('FaqSection', () => {
+describe('FaqSection (reduced motion enabled)', () => {
+  beforeEach(() => {
+    framerMotionMock.prefersReduced = true
+  })
   it('exposes the anchor id used by the scroll button', () => {
     const { container } = render(<FaqSection />)
 
@@ -58,5 +66,64 @@ describe('FaqSection', () => {
 
     expect(screen.getByText(/One search box for everything you like/)).toBeInTheDocument()
     expect(screen.getByText(/I pay for the AI tokens/)).toBeInTheDocument()
+  })
+
+  it('does not apply left-border classes to right-aligned bands', () => {
+    const { container } = render(<FaqSection />)
+
+    const rightBands = [...container.querySelectorAll('[data-align="right"]')].map((band) =>
+      band.querySelector('div[class*="border"]')
+    )
+
+    rightBands.forEach((band) => {
+      const className = band?.className || ''
+      expect(className).not.toContain('border-l')
+      expect(className).not.toContain('pl-6')
+      expect(className).toContain('border-r')
+      expect(className).toContain('pr-6')
+    })
+  })
+
+  it('does not apply right-border classes to left-aligned bands', () => {
+    const { container } = render(<FaqSection />)
+
+    const leftBands = [...container.querySelectorAll('[data-align="left"]')].map((band) =>
+      band.querySelector('div[class*="border"]')
+    )
+
+    leftBands.forEach((band) => {
+      const className = band?.className || ''
+      expect(className).not.toContain('border-r')
+      expect(className).not.toContain('pr-6')
+      expect(className).not.toContain('text-right')
+      expect(className).toContain('border-l')
+      expect(className).toContain('pl-6')
+    })
+  })
+
+  it('does not animate when reduced motion is preferred', () => {
+    const { container } = render(<FaqSection />)
+
+    const motionDivs = container.querySelectorAll('[data-faq-band]')
+    motionDivs.forEach((div) => {
+      expect(div).toBeInTheDocument()
+    })
+  })
+})
+
+describe('FaqSection (reduced motion disabled)', () => {
+  beforeEach(() => {
+    framerMotionMock.prefersReduced = false
+  })
+
+  it('applies animation props when reduced motion is not preferred', () => {
+    const { container } = render(<FaqSection />)
+
+    const motionDivs = [...container.querySelectorAll('[data-faq-band]')]
+    expect(motionDivs.length).toBe(5)
+
+    motionDivs.forEach((div) => {
+      expect(div).toBeInTheDocument()
+    })
   })
 })
