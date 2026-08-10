@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '../test/utils'
+import { render, screen, fireEvent, waitFor, within } from '../test/utils'
 import { ItemSearch } from './ItemSearch'
 import { searchService } from '../services/searchService'
 import { useAuthStore } from '../store/authStore'
@@ -71,8 +71,9 @@ describe('ItemSearch', () => {
     expect(searchService.searchItems).toHaveBeenCalledWith(
       expect.objectContaining({ query: 'dune', topicId: undefined })
     )
-    expect(screen.getByText('Books')).toBeInTheDocument()
-    expect(screen.getByText('Movies')).toBeInTheDocument()
+    const listbox = within(screen.getByRole('listbox'))
+    expect(listbox.getByText('Books')).toBeInTheDocument()
+    expect(listbox.getByText('Movies')).toBeInTheDocument()
     expect(screen.getAllByRole('option')).toHaveLength(2)
   })
 
