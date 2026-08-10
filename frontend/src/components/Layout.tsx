@@ -4,6 +4,7 @@ import { Linkedin, Globe } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { ThemeToggle } from './ThemeToggle'
 import { GitHubStarBadge } from './GitHubStarBadge'
+import { BuyMeACoffeeButton } from './BuyMeACoffeeButton'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
@@ -39,12 +40,9 @@ export function Layout() {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="text-lg font-bold tracking-tight">
-              mytops
-            </Link>
-            <GitHubStarBadge />
-          </div>
+          <Link to="/" className="text-lg font-bold tracking-tight">
+            mytops
+          </Link>
 
           <nav className="flex items-center gap-1" aria-label="Main navigation">
             <Button variant="ghost" size="sm" asChild>
@@ -75,6 +73,9 @@ export function Layout() {
               </>
             )}
 
+            <Separator orientation="vertical" className="mx-2 h-4" />
+            <GitHubStarBadge size="default" />
+            <BuyMeACoffeeButton size="sm" />
             <Separator orientation="vertical" className="mx-2 h-4" />
             <ThemeToggle />
           </nav>
