@@ -160,6 +160,65 @@ describe('ItemSearch', () => {
     expect(screen.getByTestId('enrichment-prompt')).toHaveTextContent('Books')
   })
 
+  it('exposes combobox attributes that track open state', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    const input = screen.getByLabelText('Search everything')
+    expect(input).toHaveAttribute('role', 'combobox')
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+
+    await type('dune')
+    vi.advanceTimersByTime(400)
+    await waitFor(() => screen.getByRole('listbox'))
+
+    expect(input).toHaveAttribute('aria-expanded', 'true')
+    expect(input).toHaveAttribute('aria-controls', screen.getByRole('listbox').id)
+  })
+
+  it('sets aria-activedescendant to the highlighted option and updates with arrow keys', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    await type('dune')
+    vi.advanceTimersByTime(400)
+    await waitFor(() => screen.getByRole('listbox'))
+
+    const input = screen.getByLabelText('Search everything')
+    expect(input).not.toHaveAttribute('aria-activedescendant')
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    const options = screen.getAllByRole('option')
+    expect(input).toHaveAttribute('aria-activedescendant', options[0].id)
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input).toHaveAttribute('aria-activedescendant', options[1].id)
+  })
+
+  it('gives each topic group an accessible name', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    await type('dune')
+    vi.advanceTimersByTime(400)
+    await waitFor(() => screen.getByRole('listbox'))
+
+    const groups = within(screen.getByRole('listbox')).getAllByRole('group')
+    const names = groups.map((group) => group.getAttribute('aria-label') ??
+      document.getElementById(group.getAttribute('aria-labelledby') ?? '')?.textContent)
+    expect(names.sort()).toEqual(['Books', 'Movies'])
+  })
+
+  it('skips a result whose topic is missing rather than crashing', async () => {
+    vi.mocked(searchService.searchItems).mockResolvedValue({
+      data: [...results, { id: 'i3', name: 'Broken', topic: null }] as never,
+      error: null
+    })
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    await type('dune')
+    vi.advanceTimersByTime(400)
+
+    await waitFor(() => {
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+    })
+    expect(screen.getAllByRole('option')).toHaveLength(2)
+    expect(screen.queryByText('Broken')).not.toBeInTheDocument()
+  })
+
   it('skips the topic question when a chip is already active', async () => {
     vi.mocked(searchService.searchItems).mockResolvedValue({ data: [], error: null })
     render(<ItemSearch onSelectItem={vi.fn()} />)

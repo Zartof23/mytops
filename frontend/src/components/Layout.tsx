@@ -39,12 +39,12 @@ export function Layout() {
 
       {/* Header */}
       <header className="border-b">
-        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="container mx-auto px-4 min-h-14 flex flex-wrap items-center justify-between gap-y-1">
           <Link to="/" className="text-lg font-bold tracking-tight">
             mytops
           </Link>
 
-          <nav className="flex items-center gap-1" aria-label="Main navigation">
+          <nav className="flex flex-wrap items-center justify-end gap-1" aria-label="Main navigation">
             <Button variant="ghost" size="sm" asChild>
               <Link to="/topics">Topics</Link>
             </Button>

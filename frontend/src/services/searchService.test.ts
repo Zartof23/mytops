@@ -75,23 +75,28 @@ describe('searchService', () => {
       )
     })
 
-    it('escapes percent signs as wildcards inside quoted values', async () => {
+    it('escapes percent signs so they match literally, not as wildcards', async () => {
+      // PostgREST's quoted-value grammar decodes `\X` -> `X` before Postgres ever
+      // sees it, so a single backslash is consumed by that parser. To leave a
+      // real backslash in front of the `%` for Postgres's LIKE escape, the
+      // client string needs a *doubled* backslash: \\\\%  -> (postgrest decode)
+      // -> \% -> (postgres LIKE, escape='\') -> literal %.
       const chain = mockQuery({ data: [], error: null })
 
       await searchService.searchItems({ query: '100%' })
 
       expect(chain.or).toHaveBeenCalledWith(
-        'name.ilike."%100\\%%",description.ilike."%100\\%%"'
+        'name.ilike."%100\\\\%%",description.ilike."%100\\\\%%"'
       )
     })
 
-    it('escapes underscores as wildcards inside quoted values', async () => {
+    it('escapes underscores so they match literally, not as wildcards', async () => {
       const chain = mockQuery({ data: [], error: null })
 
       await searchService.searchItems({ query: 'a_b' })
 
       expect(chain.or).toHaveBeenCalledWith(
-        'name.ilike."%a\\_b%",description.ilike."%a\\_b%"'
+        'name.ilike."%a\\\\_b%",description.ilike."%a\\\\_b%"'
       )
     })
 
@@ -103,6 +108,50 @@ describe('searchService', () => {
       expect(chain.or).toHaveBeenCalledWith(
         'name.ilike."%a\\"b%",description.ilike."%a\\"b%"'
       )
+    })
+
+    it('escapes literal backslashes so they match literally', async () => {
+      const chain = mockQuery({ data: [], error: null })
+
+      await searchService.searchItems({ query: 'a\\b' })
+
+      expect(chain.or).toHaveBeenCalledWith(
+        'name.ilike."%a\\\\\\\\b%",description.ilike."%a\\\\\\\\b%"'
+      )
+    })
+
+    it('cannot escape asterisks — PostgREST aliases * to % unconditionally — so a mixed query still sends it through untouched', async () => {
+      const chain = mockQuery({ data: [], error: null })
+
+      await searchService.searchItems({ query: 'a*b' })
+
+      expect(chain.or).toHaveBeenCalledWith(
+        'name.ilike."%a*b%",description.ilike."%a*b%"'
+      )
+    })
+
+    it('returns empty data without querying for a query made only of wildcard characters (%)', async () => {
+      const result = await searchService.searchItems({ query: '%%%' })
+
+      expect(result.data).toEqual([])
+      expect(result.error).toBeNull()
+      expect(supabase.from).not.toHaveBeenCalled()
+    })
+
+    it('returns empty data without querying for a query made only of wildcard characters (*)', async () => {
+      const result = await searchService.searchItems({ query: '***' })
+
+      expect(result.data).toEqual([])
+      expect(result.error).toBeNull()
+      expect(supabase.from).not.toHaveBeenCalled()
+    })
+
+    it('returns empty data without querying for a lone underscore query', async () => {
+      const result = await searchService.searchItems({ query: '__' })
+
+      expect(result.data).toEqual([])
+      expect(result.error).toBeNull()
+      expect(supabase.from).not.toHaveBeenCalled()
     })
 
     it('scopes to a topic when topicId is given', async () => {

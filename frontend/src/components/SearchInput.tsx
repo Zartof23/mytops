@@ -20,6 +20,17 @@ export interface SearchInputProps {
   className?: string
   /** Larger styling for the home page hero. */
   size?: 'default' | 'hero'
+  /**
+   * ARIA combobox wiring for a caller that pairs this input with a listbox
+   * dropdown (e.g. `ItemSearch`). All optional and inert when omitted, so
+   * bare usage (e.g. `TopicDetailPage`) is unaffected.
+   */
+  role?: 'combobox'
+  ariaExpanded?: boolean
+  /** Id of the listbox this input controls. */
+  ariaControls?: string
+  /** Id of the currently highlighted option, if any. */
+  ariaActiveDescendant?: string
 }
 
 const CHIP_BASE =
@@ -42,7 +53,11 @@ export function SearchInput({
   activeTopicId = null,
   onTopicChange,
   className = '',
-  size = 'default'
+  size = 'default',
+  role,
+  ariaExpanded,
+  ariaControls,
+  ariaActiveDescendant
 }: SearchInputProps) {
   const inputId = useId()
 
@@ -75,6 +90,11 @@ export function SearchInput({
           value={value}
           onChange={handleChange}
           aria-label={ariaLabel}
+          role={role}
+          aria-expanded={role === 'combobox' ? ariaExpanded : undefined}
+          aria-controls={role === 'combobox' ? ariaControls : undefined}
+          aria-activedescendant={role === 'combobox' ? ariaActiveDescendant : undefined}
+          aria-autocomplete={role === 'combobox' ? 'list' : undefined}
           className={size === 'hero' ? 'h-14 pl-11 text-base' : 'h-10 pl-9'}
         />
         {isSearching && (

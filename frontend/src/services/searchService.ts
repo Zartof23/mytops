@@ -22,18 +22,53 @@ export const MIN_QUERY_LENGTH = 2
 
 const DEFAULT_LIMIT = 8
 
+const BACKSLASH = '\\'
+
 /**
- * Escape special characters for use in PostgREST ilike with double-quoted values.
- * In double quotes, `%` and `_` are wildcards and must be backslash-escaped to match literally.
- * Backslash and double-quote themselves must also be escaped.
- * Escaping order matters: escape backslash first to avoid double-escaping.
+ * Escape a query string for embedding in a PostgREST double-quoted `ilike` value.
+ *
+ * PostgREST's quoted-value grammar decodes any `\X` pair to the single literal
+ * character `X` before the value ever reaches Postgres. That means a client-side
+ * `\%` is not "escaped percent" by the time Postgres sees it — the backslash is
+ * consumed by PostgREST's own parser and Postgres receives a bare `%`, which is
+ * still a LIKE wildcard. To make Postgres itself see a backslash-escaped
+ * wildcard (which its default `LIKE ... ESCAPE '\'` needs), the client string
+ * has to contain a *doubled* backslash before the wildcard character, so that
+ * PostgREST's decode leaves exactly one backslash in front of it. The same
+ * doubling applies to a literal backslash in the query. `"` only needs a single
+ * escape pair, since it isn't LIKE-special — it just has to survive PostgREST's
+ * quote parsing.
+ *
+ * This DOES make `%` and `_` (and `\` and `"`) match literally. It does NOT and
+ * CANNOT make `*` match literally: PostgREST treats `*` as a hard alias for `%`
+ * in `like`/`ilike` patterns (to avoid having to URL-encode `%`), and that
+ * substitution happens unconditionally with no escape mechanism — see
+ * https://docs.postgrest.org, "Pattern Matching". A query containing `*`
+ * therefore still has that position act as a wildcard. Callers must guard
+ * against that separately (see the all-wildcard-characters check below).
  */
 function escapeForIlike(query: string): string {
   return query
-    .replace(/\\/g, '\\\\')  // \ -> \\
-    .replace(/"/g, '\\"')    // " -> \"
-    .replace(/%/g, '\\%')    // % -> \%
-    .replace(/_/g, '\\_')    // _ -> \_
+    .split('')
+    .map((char) => {
+      if (char === '\\') return BACKSLASH + BACKSLASH + BACKSLASH + BACKSLASH
+      if (char === '"') return BACKSLASH + '"'
+      if (char === '%') return BACKSLASH + BACKSLASH + '%'
+      if (char === '_') return BACKSLASH + BACKSLASH + '_'
+      return char
+    })
+    .join('')
+}
+
+/**
+ * True when a query is made up entirely of characters that PostgREST/Postgres
+ * treat as LIKE wildcards (`%`, `_`) or that PostgREST aliases to one (`*`),
+ * plus whitespace. `_` and `%` are escaped literally by `escapeForIlike` above,
+ * but `*` cannot be, so a query of only these characters (e.g. "*", "%%%")
+ * would otherwise silently match every row up to the limit.
+ */
+function isOnlyWildcardCharacters(query: string): boolean {
+  return /^[%_*\s]+$/.test(query)
 }
 
 /**
@@ -53,6 +88,10 @@ export const searchService = {
     const trimmed = query.trim()
 
     if (trimmed.length < MIN_QUERY_LENGTH) {
+      return { data: [], error: null }
+    }
+
+    if (isOnlyWildcardCharacters(trimmed)) {
       return { data: [], error: null }
     }
 

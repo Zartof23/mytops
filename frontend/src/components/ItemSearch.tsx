@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useDebouncedValue } from '../lib/hooks'
 import { useAuthStore } from '../store/authStore'
@@ -40,6 +40,11 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
   const [enrichTopicId, setEnrichTopicId] = useState<string | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const listboxId = useId()
+  const getOptionId = useCallback(
+    (itemId: string) => `${listboxId}-option-${itemId}`,
+    [listboxId]
+  )
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
   const trimmedQuery = debouncedQuery.trim()
   const isQueryLongEnough = trimmedQuery.length >= MIN_QUERY_LENGTH
@@ -113,6 +118,10 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
     const byTopic = new Map<string, { topic: Topic; items: SearchResultItem[] }>()
 
     for (const item of results) {
+      // The embedded `topics(*)` join can come back null for a row whose topic
+      // is missing or unreadable. Skip it rather than crash the whole render.
+      if (!item.topic) continue
+
       const existing = byTopic.get(item.topic.id)
       if (existing) {
         existing.items.push(item)
@@ -181,6 +190,11 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
   const enrichTopic = topics.find(
     (topic) => topic.id === (activeTopicId ?? enrichTopicId)
   )
+  const dropdownOpen = isOpen && flatResults.length > 0
+  const highlightedOptionId =
+    highlightIndex >= 0 && flatResults[highlightIndex]
+      ? getOptionId(flatResults[highlightIndex].id)
+      : undefined
 
   return (
     <div ref={containerRef} onKeyDown={handleKeyDown} className="relative w-full">
@@ -194,44 +208,57 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
         topics={topics}
         activeTopicId={activeTopicId}
         onTopicChange={setActiveTopicId}
+        role="combobox"
+        ariaExpanded={dropdownOpen}
+        ariaControls={listboxId}
+        ariaActiveDescendant={highlightedOptionId}
       />
 
-      {isOpen && flatResults.length > 0 && (
+      {dropdownOpen && (
         <Card className="absolute left-0 right-0 top-16 z-40 max-h-96 overflow-y-auto p-2 text-left shadow-lg">
-          <ul role="listbox" aria-label="Search results">
-            {groups.map((group) => (
-              <li key={group.topic.id}>
-                {activeTopicId === null && (
-                  <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                    {group.topic.name}
-                  </p>
-                )}
-                <ul>
+          <ul id={listboxId} role="listbox" aria-label="Search results">
+            {groups.map((group) => {
+              const headingId = `${listboxId}-heading-${group.topic.id}`
+              return (
+                <li
+                  key={group.topic.id}
+                  role="group"
+                  aria-label={activeTopicId === null ? undefined : group.topic.name}
+                  aria-labelledby={activeTopicId === null ? headingId : undefined}
+                >
+                  {activeTopicId === null && (
+                    <p
+                      id={headingId}
+                      className="px-2 py-1 text-xs font-medium text-muted-foreground"
+                    >
+                      {group.topic.name}
+                    </p>
+                  )}
                   {group.items.map((item) => {
                     const index = flatResults.indexOf(item)
                     return (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={index === highlightIndex}
-                          onClick={() => handleSelect(item)}
-                          onMouseEnter={() => setHighlightIndex(index)}
-                          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
-                            index === highlightIndex ? 'bg-muted' : ''
-                          }`}
-                        >
-                          {item.topic.icon && (
-                            <span aria-hidden="true">{item.topic.icon}</span>
-                          )}
-                          <span className="truncate">{item.name}</span>
-                        </button>
-                      </li>
+                      <button
+                        key={item.id}
+                        id={getOptionId(item.id)}
+                        type="button"
+                        role="option"
+                        aria-selected={index === highlightIndex}
+                        onClick={() => handleSelect(item)}
+                        onMouseEnter={() => setHighlightIndex(index)}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                          index === highlightIndex ? 'bg-muted' : ''
+                        }`}
+                      >
+                        {item.topic.icon && (
+                          <span aria-hidden="true">{item.topic.icon}</span>
+                        )}
+                        <span className="truncate">{item.name}</span>
+                      </button>
                     )
                   })}
-                </ul>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </Card>
       )}
