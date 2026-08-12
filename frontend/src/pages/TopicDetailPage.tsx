@@ -11,14 +11,13 @@ import { ItemCard } from '../components/ItemCard'
 import { ItemDetailModal } from '../components/ItemDetailModal'
 import { EnrichmentPrompt } from '../components/EnrichmentPrompt'
 import { Pagination } from '../components/Pagination'
+import { SearchInput } from '../components/SearchInput'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SEO } from '@/components/SEO'
 import { PageTransition } from '@/components/PageTransition'
-import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Topic, Item, ItemWithStats } from '@/types'
 
@@ -353,10 +352,6 @@ export function TopicDetailPage() {
   }, [debouncedSearchQuery, activeFilter, currentPage, topic, user?.id])
 
   // Memoize event handlers to prevent unnecessary re-renders
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value)
-  }, [])
-
   const handleFilterChange = useCallback((filter: FilterOption) => {
     setActiveFilter(filter)
   }, [])
@@ -660,30 +655,18 @@ export function TopicDetailPage() {
 
         {/* Search Input */}
         <motion.div
-          className="mb-4 relative"
+          className="mb-4"
           initial={prefersReducedMotion ? {} : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <label htmlFor="search" className="sr-only">
-            Search {topic.name.toLowerCase()}
-          </label>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <Input
-            id="search"
-            type="text"
-            placeholder={`Search ${topic.name.toLowerCase()}...`}
+          <SearchInput
             value={searchQuery}
-            onChange={handleSearchChange}
-            className="h-10 pl-9"
-            aria-label={`Search ${topic.name.toLowerCase()}`}
+            onChange={setSearchQuery}
+            placeholder={`Search ${topic.name.toLowerCase()}...`}
+            ariaLabel={`Search ${topic.name.toLowerCase()}`}
+            isSearching={searching}
           />
-          {searching && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2" role="status" aria-live="polite">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              <span className="sr-only">Searching...</span>
-            </span>
-          )}
         </motion.div>
 
         {/* Filter Pills */}
