@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
 import { statsService } from '../services/statsService'
@@ -23,35 +23,65 @@ export function HomePage() {
   const [stats, setStats] = useState({ avgRating: 0, ratingCount: 0 })
   const [userRating, setUserRating] = useState<number | null>(null)
 
-  const handleSelectItem = useCallback(async (item: SearchResultItem) => {
-    setSelectedItem(item)
-    setIsModalOpen(true)
-    setStats({ avgRating: 0, ratingCount: 0 })
-    setUserRating(null)
+  // Tracks the id of the most recently requested item so async responses that
+  // resolve after the user has moved on to a different item can be discarded.
+  const requestedItemIdRef = useRef<string | null>(null)
 
-    // Search results carry no stats, so fetch them for just this item.
-    const { data } = await statsService.getItemStats(item.id)
-    if (data) setStats(data)
-  }, [])
+  const handleSelectItem = useCallback(
+    async (item: SearchResultItem) => {
+      requestedItemIdRef.current = item.id
+
+      setSelectedItem(item)
+      setIsModalOpen(true)
+      setStats({ avgRating: 0, ratingCount: 0 })
+      setUserRating(null)
+
+      // Search results carry no stats, so fetch them for just this item.
+      const statsPromise = statsService.getItemStats(item.id)
+      // Only fetch the signed-in user's existing rating; logged-out users have none.
+      const ratingPromise = user
+        ? ratingService.getUserRating(item.id)
+        : Promise.resolve({ data: null, error: null })
+
+      const [{ data: statsData }, { data: ratingData }] = await Promise.all([
+        statsPromise,
+        ratingPromise
+      ])
+
+      // Discard stale responses if the user has since selected another item.
+      if (requestedItemIdRef.current !== item.id) return
+
+      if (statsData) setStats(statsData)
+      setUserRating(ratingData ? ratingData.rating : null)
+    },
+    [user]
+  )
 
   const handleRatingChange = useCallback(
     async (rating: number) => {
       if (!selectedItem) return
 
+      const itemId = selectedItem.id
+      const previousRating = userRating
+
       setUserRating(rating)
       const { error } = await ratingService.upsertRating({
-        item_id: selectedItem.id,
+        item_id: itemId,
         rating
       })
+
+      if (requestedItemIdRef.current !== itemId) return
+
       if (error) {
-        setUserRating(null)
+        setUserRating(previousRating)
         return
       }
 
-      const { data } = await statsService.getItemStats(selectedItem.id)
+      const { data } = await statsService.getItemStats(itemId)
+      if (requestedItemIdRef.current !== itemId) return
       if (data) setStats(data)
     },
-    [selectedItem]
+    [selectedItem, userRating]
   )
 
   const scrollToFaq = useCallback(() => {
