@@ -1,20 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import React from 'react'
 import { render, screen } from '../test/utils'
 import { FaqSection, FAQ_ANCHOR_ID } from './FaqSection'
 
 const framerMotionMock = { prefersReduced: true }
+const motionDivPropsRecorder: Array<{
+  bandId: string
+  whileInView?: any
+  viewport?: any
+  transition?: any
+}> = []
 
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion')
   return {
     ...actual,
-    useReducedMotion: () => framerMotionMock.prefersReduced
+    useReducedMotion: () => framerMotionMock.prefersReduced,
+    motion: {
+      ...actual.motion,
+      div: vi.fn(
+        ({
+          children,
+          whileInView,
+          viewport,
+          transition,
+          'data-faq-band': bandId,
+          ...props
+        }: any) => {
+          // Record the animation props passed to motion.div
+          motionDivPropsRecorder.push({
+            bandId,
+            whileInView,
+            viewport,
+            transition
+          })
+          // Render as a regular div to pass through to DOM
+          return React.createElement(
+            'div',
+            { ...props, 'data-faq-band': bandId },
+            children
+          )
+        }
+      )
+    }
   }
 })
 
 describe('FaqSection (reduced motion enabled)', () => {
   beforeEach(() => {
     framerMotionMock.prefersReduced = true
+    motionDivPropsRecorder.length = 0
   })
   it('exposes the anchor id used by the scroll button', () => {
     const { container } = render(<FaqSection />)
@@ -101,12 +136,14 @@ describe('FaqSection (reduced motion enabled)', () => {
     })
   })
 
-  it('does not animate when reduced motion is preferred', () => {
-    const { container } = render(<FaqSection />)
+  it('omits animation props when reduced motion is preferred', () => {
+    render(<FaqSection />)
 
-    const motionDivs = container.querySelectorAll('[data-faq-band]')
-    motionDivs.forEach((div) => {
-      expect(div).toBeInTheDocument()
+    expect(motionDivPropsRecorder.length).toBe(5)
+    motionDivPropsRecorder.forEach((props) => {
+      expect(props.whileInView).toBeUndefined()
+      expect(props.viewport).toBeUndefined()
+      expect(props.transition).toBeUndefined()
     })
   })
 })
@@ -114,16 +151,24 @@ describe('FaqSection (reduced motion enabled)', () => {
 describe('FaqSection (reduced motion disabled)', () => {
   beforeEach(() => {
     framerMotionMock.prefersReduced = false
+    motionDivPropsRecorder.length = 0
   })
 
-  it('applies animation props when reduced motion is not preferred', () => {
-    const { container } = render(<FaqSection />)
+  it('includes animation props when reduced motion is not preferred', () => {
+    render(<FaqSection />)
 
-    const motionDivs = [...container.querySelectorAll('[data-faq-band]')]
-    expect(motionDivs.length).toBe(5)
+    expect(motionDivPropsRecorder.length).toBe(5)
 
-    motionDivs.forEach((div) => {
-      expect(div).toBeInTheDocument()
+    motionDivPropsRecorder.forEach((props) => {
+      // All animation props should be present
+      expect(props.whileInView).toBeDefined()
+      expect(props.viewport).toBeDefined()
+      expect(props.transition).toBeDefined()
+
+      // Verify the animation targets
+      expect(props.whileInView).toEqual({ opacity: 1, x: 0 })
+      expect(props.viewport).toEqual({ once: true, amount: 0.4 })
+      expect(props.transition).toEqual({ duration: 0.5 })
     })
   })
 })
