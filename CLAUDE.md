@@ -111,7 +111,7 @@ mytops/
 
 ### Working Features
 - Authentication (Email + Google + GitHub OAuth)
-- Browse 6 topics (Movies, Series, Books, Anime, Games, Restaurants)
+- Cross-topic search from the home page (Movies, Series, Books, Anime, Games, Restaurants), with `/topics` browse kept as a secondary path
 - Rate items 1-5 stars, build preferables collection
 - Profile management, TODO lists
 - AI-powered item enrichment (search + add new items)

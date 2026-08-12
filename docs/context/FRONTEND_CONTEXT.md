@@ -18,7 +18,12 @@ frontend/src/
 │   ├── ErrorBoundary.tsx
 │   ├── RouteGuards.tsx  # ProtectedRoute, PublicOnlyRoute
 │   ├── SEO.tsx          # Meta tags and structured data
-│   └── PageTransition.tsx  # Animation wrappers
+│   ├── PageTransition.tsx  # Animation wrappers
+│   ├── SearchInput.tsx  # Presentational, controlled search box; shared by HomePage (via ItemSearch) and TopicDetailPage
+│   ├── ItemSearch.tsx   # Home-only: debounce, dropdown, keyboard nav, enrichment fallback
+│   ├── FaqSection.tsx   # Scroll-revealed FAQ bands; exports FAQ_ANCHOR_ID
+│   ├── BuyMeACoffeeButton.tsx
+│   └── GitHubStarBadge.tsx  # Takes a `size` prop
 ├── pages/
 │   ├── HomePage.tsx
 │   ├── LoginPage.tsx
@@ -33,7 +38,8 @@ frontend/src/
 │   ├── statsService.ts
 │   ├── profileService.ts
 │   ├── todoService.ts
-│   └── enrichmentService.ts
+│   ├── enrichmentService.ts
+│   └── searchService.ts  # searchItems({ query, topicId?, limit?, metadataFilters? }), listTopics(). metadataFilters is accepted and ignored — reserved for metadata search.
 ├── hooks/
 │   └── useEnrichment.ts
 ├── lib/
@@ -84,6 +90,10 @@ export function TopicCard({ topic, onSelect }: Props) {
   return ( /* ... */ )
 }
 ```
+
+### Ownership Pattern: Components vs. Pages
+
+**Components own presentation, pages own what happens on selection.** `ItemSearch` calls `onSelectItem`; it does not know a detail modal exists — `HomePage` decides to open one. Keep this split when extracting new components: a component should describe *what happened*, not *what to do about it*.
 
 ### File Naming
 

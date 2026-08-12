@@ -560,6 +560,33 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 **Local state** via React hooks for component-specific state
 
+### Home Page / Discovery Flow
+
+The home page is search-first: `HomePage` renders `ItemSearch`, which wraps the
+shared `SearchInput` with debounce, a results dropdown, keyboard navigation,
+and an AI-enrichment fallback when nothing matches. Selecting a result calls
+`onSelectItem`, which `HomePage` uses to open `ItemDetailModal` — `ItemSearch`
+itself has no knowledge of the modal. `TopicDetailPage` reuses `SearchInput`
+directly (no dropdown) to filter its topic-scoped grid.
+
+There are two distinct search paths, chosen for different jobs:
+
+- **Cross-topic (home page)** — `searchService.searchItems` queries the
+  `items` table directly via PostgREST (`ilike` on `name`/`description`,
+  values escaped rather than stripped so queries like `"Sci-Fi (2020)"` still
+  match literally). It has no `topic_id` filter requirement, but the tradeoff
+  is that results carry no rating stats — `HomePage` fetches stats
+  per-item via `statsService` only when the detail modal opens.
+- **Topic-scoped (topic page)** — `TopicDetailPage` drives a filtered,
+  paginated grid through the `get_items_with_stats` RPC, which requires a
+  `topic_id` and returns rating stats inline. This RPC can't answer an
+  "all topics" query, which is why the home page doesn't use it.
+
+Cross-topic AI enrichment (triggered from `ItemSearch` when a search returns
+nothing) asks the user which topic the item belongs to before calling
+`ai-enrich-item`, since that function requires a `topic_id` and a wrong guess
+would write the item into the wrong topic.
+
 ### Data Fetching
 
 Direct Supabase client calls (no additional abstraction layer)

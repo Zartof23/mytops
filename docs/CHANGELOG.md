@@ -16,6 +16,32 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-12] Search-First Home Page: Cross-Topic Search, New FAQ, Navbar Rearrange
+
+**What**:
+- Rebuilt `HomePage` around a cross-topic search box. Removed the carousel, hero banner, and CTAs that previously buried discovery behind `/topics`.
+- Rebuilt the FAQ as scroll-revealed alternating bands with new copy and a new order (`FaqSection`, exports `FAQ_ANCHOR_ID`).
+- Moved the GitHub star badge to the right of the navbar and enlarged it (`GitHubStarBadge` now takes a `size` prop). Added a Buy Me a Coffee button to the navbar and repeated it in the last FAQ band (`BuyMeACoffeeButton`).
+
+**Why**: Discovery is the product's core loop and was buried two clicks deep behind `/topics`. Search-first makes the first screen the useful one.
+
+**Decisions worth recording**:
+- `searchService.searchItems` queries PostgREST directly (`items` table, `.or()` on `name`/`description` ilike) rather than the `get_items_with_stats` RPC, because that RPC requires a `topic_id` and therefore cannot search across topics. Consequence: search results carry no rating stats, so `HomePage` fetches stats per item (via `statsService`) when opening the detail modal. Two distinct search paths now exist side by side: PostgREST for cross-topic search, the RPC for topic-scoped browsing with stats.
+- ilike values are escaped, not stripped. `searchService`'s `escapeForIlike` helper wraps the value in double quotes and backslash-escapes `%`, `_`, `"`, and `\`. An earlier approach that stripped those characters was rejected because it mangled legitimate queries like "Sci-Fi (2020)".
+- Search extraction split into two components rather than one: `SearchInput` (presentational, controlled, shared by `HomePage` and `TopicDetailPage`) and `ItemSearch` (home-page only — debounce, dropdown, keyboard navigation, enrichment fallback). `TopicDetailPage` drives a filtered, paginated grid through the `get_items_with_stats` RPC, which needs a `topic_id` and can't answer a cross-topic query; unifying the two would have meant rebuilding that pipeline for no user-visible gain.
+- `HomePage` seeds a signed-in user's existing rating when opening an item from search results, and guards all three of its async calls (search, stats fetch, existing-rating fetch) against stale responses with a latest-request ref. This wasn't in the original plan; it was added during review so reopening an already-rated item doesn't show it as unrated.
+- Buy Me a Coffee is reimplemented rather than script-embedded: the vendor script injects at its own tag position, needs an external-origin allowance, and is not unit-testable.
+- Cross-topic AI enrichment asks the user which topic the item belongs to, because `ai-enrich-item` requires a `topic_id` and misclassification would write rows into the wrong topic.
+- `.wrangler/` added to `.gitignore`; local Cloudflare cache artifacts had been committed by accident and were purged from the branch history.
+
+**Breaking**: None.
+
+**Follow-on phases**: Flagging (Phase 2) and admin review / soft delete / re-scan (Phase 3), per `docs/superpowers/specs/2026-08-09-search-first-ux-design.md`.
+
+**Files**: `frontend/src/pages/HomePage.tsx`, `frontend/src/pages/TopicDetailPage.tsx`, `frontend/src/services/searchService.ts` (new), `frontend/src/components/SearchInput.tsx` (new), `ItemSearch.tsx` (new), `FaqSection.tsx` (new), `BuyMeACoffeeButton.tsx` (new), `GitHubStarBadge.tsx`, `.gitignore`
+
+---
+
 ### [2026-08-06] MVP 2 Complete: Removed Curated Seed Items, Dropped Source Badge
 
 **What**:
