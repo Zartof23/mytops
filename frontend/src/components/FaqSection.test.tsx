@@ -99,7 +99,9 @@ describe('FaqSection (reduced motion enabled)', () => {
   it('renders answer copy when reduced motion is preferred', () => {
     render(<FaqSection />)
 
-    expect(screen.getByText(/One search box for everything you like/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/An AI-powered single place to keep your tops organized/)
+    ).toBeInTheDocument()
     expect(screen.getByText(/I pay for the AI tokens/)).toBeInTheDocument()
   })
 

@@ -18,8 +18,10 @@ const FAQ_BANDS: FaqBand[] = [
     question: 'What is this?',
     answer: (
       <>
-        One search box for everything you like. Movies, series, books, anime,
-        games, restaurants. Find a thing, rate it, it&apos;s yours. If it&apos;s
+        An AI-powered single place to keep your tops organized across every
+        topic — movies, series, books, anime, games, restaurants — and
+        everything you still want to do: watch, read, play, eat. Rate what
+        you&apos;ve already been through, list what&apos;s next. If it&apos;s
         not in the database, AI goes and finds it, and then it&apos;s in there
         permanently for everyone.
       </>
@@ -64,7 +66,7 @@ const FAQ_BANDS: FaqBand[] = [
       <>
         <p className="mb-4">
           Yes. I pay for the AI tokens. If you want to help, star the repo or buy
-          me a coffee. Both work. One is cheaper for you.
+          me a coffee. Both work.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <GitHubStarBadge size="default" />

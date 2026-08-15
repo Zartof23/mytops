@@ -5,6 +5,7 @@ import { statsService } from '../services/statsService'
 import { ratingService } from '../services/ratingService'
 import { ItemSearch } from '../components/ItemSearch'
 import { FaqSection, FAQ_ANCHOR_ID } from '../components/FaqSection'
+import { TopicBands } from '../components/TopicBands'
 import { ItemDetailModal } from '@/components/ItemDetailModal'
 import { SEO, WebSiteSchema } from '@/components/SEO'
 import { PageTransition } from '@/components/PageTransition'
@@ -22,6 +23,8 @@ export function HomePage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [stats, setStats] = useState({ avgRating: 0, ratingCount: 0 })
   const [userRating, setUserRating] = useState<number | null>(null)
+  /** True once a search is running or has results — collapses the hero. */
+  const [isSearchActive, setIsSearchActive] = useState(false)
 
   // Tracks the id of the most recently requested item so async responses that
   // resolve after the user has moved on to a different item can be discarded.
@@ -97,32 +100,56 @@ export function HomePage() {
       />
       <WebSiteSchema />
 
-      <div className="mx-auto max-w-3xl px-4">
-        {/* Hero: tagline + search, sized to fill the first viewport */}
-        <div className="relative flex min-h-[70vh] flex-col justify-center">
-          <motion.div
-            className="mb-8 text-center"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <p className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Search anything. Movies, books, games, ramen shops.
-            </p>
-            <p className="mt-2 text-muted-foreground">
-              If it&apos;s not here yet, AI finds it and adds it — for everyone.
-            </p>
-          </motion.div>
+      <TopicBands />
 
-          <ItemSearch onSelectItem={handleSelectItem} />
-
+      <div className="mx-auto max-w-5xl px-4">
+        <div className="relative">
           <button
             type="button"
             onClick={scrollToFaq}
-            className="absolute bottom-0 right-0 -rotate-6 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="absolute left-0 top-0 -rotate-6 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
             What the heck is this?
           </button>
+
+          {/*
+            Hero: fills the first viewport until a search runs, then shrinks so
+            the results take over the space. Both the height and the tagline
+            animate, which is what makes the input appear to travel upward.
+          */}
+          <motion.div
+            className="flex flex-col justify-center"
+            animate={{
+              minHeight: isSearchActive ? '22vh' : '70vh',
+              paddingTop: isSearchActive ? '4rem' : '0rem'
+            }}
+            initial={false}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <motion.div
+              className="overflow-hidden text-center"
+              animate={{
+                opacity: isSearchActive ? 0 : 1,
+                height: isSearchActive ? 0 : 'auto',
+                marginBottom: isSearchActive ? 0 : '2rem'
+              }}
+              initial={false}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              aria-hidden={isSearchActive}
+            >
+              <p className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Search anything. Movies, books, games, ramen shops.
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                If it&apos;s not here yet, AI finds it and adds it — for everyone.
+              </p>
+            </motion.div>
+
+            <ItemSearch
+              onSelectItem={handleSelectItem}
+              onActiveChange={setIsSearchActive}
+            />
+          </motion.div>
         </div>
 
         <FaqSection />

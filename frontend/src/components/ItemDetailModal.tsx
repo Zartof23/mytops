@@ -146,7 +146,7 @@ const ItemDetailModalComponent = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="custom-scrollbar max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 pr-8">
             {item.topic?.icon && <span className="text-xl">{item.topic.icon}</span>}

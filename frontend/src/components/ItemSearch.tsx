@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useDebouncedValue } from '../lib/hooks'
+import { motion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
 import {
   searchService,
@@ -9,45 +9,58 @@ import {
 } from '../services/searchService'
 import { SearchInput } from './SearchInput'
 import { EnrichmentPrompt } from './EnrichmentPrompt'
+import { LazyImage } from './LazyImage'
 import { Card } from '@/components/ui/card'
 import type { Item, Topic } from '@/types'
 
-const SEARCH_DEBOUNCE_MS = 300
-const RESULT_LIMIT = 8
+const RESULT_LIMIT = 24
 
 interface ItemSearchProps {
   onSelectItem: (item: SearchResultItem) => void
+  /**
+   * Fires whenever the component starts or stops showing search output, so a
+   * parent can collapse its hero and hand the space over to the results.
+   */
+  onActiveChange?: (isActive: boolean) => void
+}
+
+/** First usable image on an item, mirroring the modal's fallback chain. */
+function getImageUrl(item: Item): string | null {
+  if (item.image_url) return item.image_url
+  if (typeof item.metadata?.poster_url === 'string') return item.metadata.poster_url
+  if (typeof item.metadata?.image === 'string') return item.metadata.image
+  return null
 }
 
 /**
- * Cross-topic search with a results dropdown and AI enrichment fallback.
+ * Cross-topic search rendering results as cards grouped into per-topic sections.
  *
- * Owns the query, the debounce, the fetch and the dropdown. It does not decide
- * what happens when a result is chosen — the parent does, via `onSelectItem`.
+ * The query is only sent when the user presses Enter — no debounce — so typing
+ * never fires a request and the layout only shifts on an explicit action. Owns
+ * the query and the fetch; the parent decides what a selection means via
+ * `onSelectItem`.
  */
-export function ItemSearch({ onSelectItem }: ItemSearchProps) {
+export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   const { user } = useAuthStore()
 
   const [topics, setTopics] = useState<Topic[]>([])
   const [query, setQuery] = useState('')
+  /** The query actually searched for — set on Enter, not on keystroke. */
+  const [submittedQuery, setSubmittedQuery] = useState('')
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null)
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
   /** Topic chosen in the "which topic is it?" step. */
   const [enrichTopicId, setEnrichTopicId] = useState<string | null>(null)
 
-  const containerRef = useRef<HTMLDivElement>(null)
   const listboxId = useId()
   const getOptionId = useCallback(
     (itemId: string) => `${listboxId}-option-${itemId}`,
     [listboxId]
   )
-  const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
-  const trimmedQuery = debouncedQuery.trim()
-  const isQueryLongEnough = trimmedQuery.length >= MIN_QUERY_LENGTH
+  const isQueryLongEnough = submittedQuery.length >= MIN_QUERY_LENGTH
 
   // Load topics once for the scope chips and the enrichment question.
   useEffect(() => {
@@ -62,12 +75,11 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
     }
   }, [])
 
-  // Run the search whenever the debounced query or the scope changes.
+  // Run the search whenever a query is submitted or the scope changes.
   useEffect(() => {
     if (!isQueryLongEnough) {
       setResults([])
       setHasSearched(false)
-      setIsOpen(false)
       return
     }
 
@@ -76,7 +88,7 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
 
     searchService
       .searchItems({
-        query: trimmedQuery,
+        query: submittedQuery,
         topicId: activeTopicId ?? undefined,
         limit: RESULT_LIMIT
       })
@@ -84,7 +96,6 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
         if (cancelled) return
         setResults(data)
         setHasSearched(true)
-        setIsOpen(true)
         setHighlightIndex(-1)
       })
       .finally(() => {
@@ -94,26 +105,14 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
     return () => {
       cancelled = true
     }
-  }, [trimmedQuery, isQueryLongEnough, activeTopicId])
+  }, [submittedQuery, isQueryLongEnough, activeTopicId])
 
   // Reset the enrichment topic choice whenever the question changes.
   useEffect(() => {
     setEnrichTopicId(null)
-  }, [trimmedQuery, activeTopicId])
+  }, [submittedQuery, activeTopicId])
 
-  // Close the dropdown when focus leaves the component.
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [])
-
-  /** Results in display order, grouped by topic when the scope is "all". */
+  /** Results in display order, grouped by topic. */
   const groups = useMemo(() => {
     const byTopic = new Map<string, { topic: Topic; items: SearchResultItem[] }>()
 
@@ -141,7 +140,6 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
 
   const handleSelect = useCallback(
     (item: SearchResultItem) => {
-      setIsOpen(false)
       onSelectItem(item)
     },
     [onSelectItem]
@@ -149,7 +147,19 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!isOpen || flatResults.length === 0) return
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        // Enter picks the highlighted card if there is one, otherwise it is
+        // what actually launches the search.
+        if (highlightIndex >= 0 && flatResults[highlightIndex]) {
+          handleSelect(flatResults[highlightIndex])
+        } else {
+          setSubmittedQuery(query.trim())
+        }
+        return
+      }
+
+      if (flatResults.length === 0) return
 
       if (event.key === 'ArrowDown') {
         event.preventDefault()
@@ -159,16 +169,11 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
         setHighlightIndex((prev) =>
           prev <= 0 ? flatResults.length - 1 : prev - 1
         )
-      } else if (event.key === 'Enter') {
-        if (highlightIndex >= 0) {
-          event.preventDefault()
-          handleSelect(flatResults[highlightIndex])
-        }
       } else if (event.key === 'Escape') {
-        setIsOpen(false)
+        setHighlightIndex(-1)
       }
     },
-    [isOpen, flatResults, highlightIndex, handleSelect]
+    [flatResults, highlightIndex, handleSelect, query]
   )
 
   const handleEnrichmentComplete = useCallback(
@@ -183,6 +188,7 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
 
   const handleEnrichmentCancel = useCallback(() => {
     setQuery('')
+    setSubmittedQuery('')
     setEnrichTopicId(null)
   }, [])
 
@@ -190,18 +196,25 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
   const enrichTopic = topics.find(
     (topic) => topic.id === (activeTopicId ?? enrichTopicId)
   )
-  const dropdownOpen = isOpen && flatResults.length > 0
+  const hasResults = flatResults.length > 0
   const highlightedOptionId =
     highlightIndex >= 0 && flatResults[highlightIndex]
       ? getOptionId(flatResults[highlightIndex].id)
       : undefined
 
+  // Anything below the input counts as "active": the parent uses this to give
+  // the results room by collapsing the hero.
+  const isActive = isQueryLongEnough && (isSearching || hasSearched)
+  useEffect(() => {
+    onActiveChange?.(isActive)
+  }, [isActive, onActiveChange])
+
   return (
-    <div ref={containerRef} onKeyDown={handleKeyDown} className="relative w-full">
+    <div onKeyDown={handleKeyDown} className="w-full">
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder="what are you into?"
+        placeholder="what are you into? (press Enter)"
         ariaLabel="Search everything"
         isSearching={isSearching}
         size="hero"
@@ -209,35 +222,38 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
         activeTopicId={activeTopicId}
         onTopicChange={setActiveTopicId}
         role="combobox"
-        ariaExpanded={dropdownOpen}
+        ariaExpanded={hasResults}
         ariaControls={listboxId}
         ariaActiveDescendant={highlightedOptionId}
       />
 
-      {dropdownOpen && (
-        <Card className="absolute left-0 right-0 top-16 z-40 max-h-96 overflow-y-auto p-2 text-left shadow-lg">
-          <ul id={listboxId} role="listbox" aria-label="Search results">
-            {groups.map((group) => {
-              const headingId = `${listboxId}-heading-${group.topic.id}`
-              return (
-                <li
-                  key={group.topic.id}
-                  role="group"
-                  aria-label={activeTopicId === null ? undefined : group.topic.name}
-                  aria-labelledby={activeTopicId === null ? headingId : undefined}
+      {hasResults && (
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label="Search results"
+          className="mt-8 flex flex-col gap-8 text-left"
+        >
+          {groups.map((group) => {
+            const headingId = `${listboxId}-heading-${group.topic.id}`
+            return (
+              <li key={group.topic.id} role="group" aria-labelledby={headingId}>
+                <p
+                  id={headingId}
+                  className="mb-3 flex items-center gap-2 border-b pb-2 text-sm font-medium text-muted-foreground"
                 >
-                  {activeTopicId === null && (
-                    <p
-                      id={headingId}
-                      className="px-2 py-1 text-xs font-medium text-muted-foreground"
-                    >
-                      {group.topic.name}
-                    </p>
-                  )}
+                  {group.topic.icon && <span aria-hidden="true">{group.topic.icon}</span>}
+                  {group.topic.name}
+                  <span className="text-xs">({group.items.length})</span>
+                </p>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {group.items.map((item) => {
                     const index = flatResults.indexOf(item)
+                    const imageUrl = getImageUrl(item)
+
                     return (
-                      <button
+                      <motion.button
                         key={item.id}
                         id={getOptionId(item.id)}
                         type="button"
@@ -245,26 +261,43 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
                         aria-selected={index === highlightIndex}
                         onClick={() => handleSelect(item)}
                         onMouseEnter={() => setHighlightIndex(index)}
-                        className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
-                          index === highlightIndex ? 'bg-muted' : ''
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
+                        className={`group flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                          index === highlightIndex ? 'border-foreground/40 bg-muted' : ''
                         }`}
                       >
-                        {item.topic.icon && (
-                          <span aria-hidden="true">{item.topic.icon}</span>
-                        )}
-                        <span className="truncate">{item.name}</span>
-                      </button>
+                        <div className="flex h-32 w-full items-center justify-center overflow-hidden bg-muted">
+                          {imageUrl ? (
+                            <LazyImage
+                              src={imageUrl}
+                              alt={item.name}
+                              className="h-full w-full"
+                              aspectRatio="auto"
+                              objectFit="cover"
+                            />
+                          ) : (
+                            <span className="text-2xl opacity-40" aria-hidden="true">
+                              {item.topic.icon ?? '?'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="line-clamp-2 px-3 py-2 text-sm font-medium">
+                          {item.name}
+                        </span>
+                      </motion.button>
                     )
                   })}
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       {noMatches && !user && (
-        <Card className="mt-4 p-4 text-center text-sm text-muted-foreground">
+        <Card className="mt-8 p-4 text-center text-sm text-muted-foreground">
           <p>Nothing here yet.</p>
           <p>
             <Link to="/login" className="underline">
@@ -276,7 +309,7 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
       )}
 
       {noMatches && user && !enrichTopic && (
-        <Card className="mt-4 p-4 text-center">
+        <Card className="mt-8 p-4 text-center">
           <p className="mb-3 text-sm">Not in here yet. Which topic is it?</p>
           <div className="flex flex-wrap justify-center gap-2">
             {topics.map((topic) => (
@@ -296,9 +329,9 @@ export function ItemSearch({ onSelectItem }: ItemSearchProps) {
       )}
 
       {noMatches && user && enrichTopic && (
-        <div className="mt-4">
+        <div className="mt-8">
           <EnrichmentPrompt
-            searchQuery={trimmedQuery}
+            searchQuery={submittedQuery}
             topicId={enrichTopic.id}
             topicSlug={enrichTopic.slug}
             topicName={enrichTopic.name}

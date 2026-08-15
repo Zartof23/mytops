@@ -16,6 +16,30 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-15] Home Page Polish: Collapsing Hero, Result Cards, Topic-Band Background
+
+**What**:
+- Search now runs on **Enter**, not on a debounce. `ItemSearch` keeps a separate `submittedQuery`; typing changes nothing until the user commits.
+- Results moved out of the absolutely-positioned dropdown and into in-flow **card sections grouped per topic** (image + title, responsive 2/3/4-column grid). Result limit raised 8 → 24.
+- The hero collapses when a search is active: `ItemSearch` reports its state via a new `onActiveChange` prop, and `HomePage` animates the container's min-height (70vh → 22vh) and fades out the tagline, so the input travels upward and hands the space to the results.
+- Moved the "What the heck is this?" button from the bottom-right to the top-left of the hero.
+- New `TopicBands` background: six faint vertical topic-colored gradients fading out down the page, behind a blur to soften the seams.
+- Custom `.custom-scrollbar` utility (`index.css`), applied to `ItemDetailModal`'s scroll container.
+- FAQ copy: "What is this?" reframed around organizing tops across topics plus a to-do dimension; removed "One is cheaper for you." from "Is it free?".
+
+**Why**: Typing-triggered search made the layout jump on every keystroke and fired a request per pause; a dropdown constrained results to a narrow list with no room for imagery. Committing on Enter makes the space reclaimed by the collapsing hero available for a proper card grid.
+
+**Decisions worth recording**:
+- The listbox/option ARIA structure was kept even though results are now a grid, so keyboard navigation and the combobox wiring survive the visual change unmodified. Escape now clears the highlight instead of closing a dropdown — there is nothing to close.
+- Click-outside handling was dropped along with the dropdown; in-flow results have no reason to disappear on an outside click.
+- Changing a topic chip re-runs the last **submitted** query rather than clearing results, so scoping stays a one-click refinement.
+
+**Breaking**: None.
+
+**Files Changed**: `frontend/src/components/ItemSearch.tsx`, `ItemSearch.test.tsx`, `TopicBands.tsx` (new), `FaqSection.tsx`, `FaqSection.test.tsx`, `ItemDetailModal.tsx`, `frontend/src/pages/HomePage.tsx`, `frontend/src/index.css`.
+
+---
+
 ### [2026-08-12] Search-First Home Page: Cross-Topic Search, New FAQ, Navbar Rearrange
 
 **What**:

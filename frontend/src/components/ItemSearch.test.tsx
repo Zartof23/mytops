@@ -36,23 +36,38 @@ function setAuth(user: { id: string } | null) {
   vi.mocked(useAuthStore).mockReturnValue({ user } as never)
 }
 
-async function type(value: string) {
+function type(value: string) {
   fireEvent.change(screen.getByLabelText('Search everything'), { target: { value } })
+}
+
+/** Types a query and submits it the only way the UI allows: Enter. */
+function search(value: string) {
+  type(value)
+  fireEvent.keyDown(screen.getByLabelText('Search everything'), { key: 'Enter' })
 }
 
 describe('ItemSearch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.useFakeTimers({ shouldAdvanceTime: true })
     setAuth({ id: 'u1' })
     vi.mocked(searchService.listTopics).mockResolvedValue({ data: topics as never, error: null })
     vi.mocked(searchService.searchItems).mockResolvedValue({ data: results as never, error: null })
   })
 
+  it('does not search while the user is only typing', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    type('dune')
+
+    await waitFor(() => {
+      expect(searchService.listTopics).toHaveBeenCalled()
+    })
+    expect(searchService.searchItems).not.toHaveBeenCalled()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
   it('does not search for queries shorter than the minimum', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('d')
-    vi.advanceTimersByTime(400)
+    search('d')
 
     await waitFor(() => {
       expect(searchService.searchItems).not.toHaveBeenCalled()
@@ -60,10 +75,9 @@ describe('ItemSearch', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
-  it('searches after the debounce and shows results grouped by topic', async () => {
+  it('searches on Enter and shows result cards grouped by topic', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
 
     await waitFor(() => {
       expect(screen.getByRole('listbox')).toBeInTheDocument()
@@ -77,13 +91,24 @@ describe('ItemSearch', () => {
     expect(screen.getAllByRole('option')).toHaveLength(2)
   })
 
+  it('reports its active state so the hero can collapse', async () => {
+    const onActiveChange = vi.fn()
+    render(<ItemSearch onSelectItem={vi.fn()} onActiveChange={onActiveChange} />)
+
+    expect(onActiveChange).toHaveBeenLastCalledWith(false)
+
+    search('dune')
+    await waitFor(() => {
+      expect(onActiveChange).toHaveBeenLastCalledWith(true)
+    })
+  })
+
   it('scopes the search when a topic chip is active', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
     await waitFor(() => screen.getByRole('button', { name: 'Search Movies only' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Search Movies only' }))
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
 
     await waitFor(() => {
       expect(searchService.searchItems).toHaveBeenCalledWith(
@@ -92,11 +117,26 @@ describe('ItemSearch', () => {
     })
   })
 
-  it('calls onSelectItem when a result is clicked', async () => {
+  it('re-runs the submitted query when the scope changes', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    await waitFor(() => screen.getByRole('button', { name: 'Search Movies only' }))
+
+    search('dune')
+    await waitFor(() => screen.getByRole('listbox'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search Books only' }))
+
+    await waitFor(() => {
+      expect(searchService.searchItems).toHaveBeenCalledWith(
+        expect.objectContaining({ query: 'dune', topicId: 't2' })
+      )
+    })
+  })
+
+  it('calls onSelectItem when a result card is clicked', async () => {
     const onSelectItem = vi.fn()
     render(<ItemSearch onSelectItem={onSelectItem} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
 
     await waitFor(() => screen.getByRole('listbox'))
     fireEvent.click(screen.getByRole('option', { name: /Dune \(2021\)/ }))
@@ -107,8 +147,7 @@ describe('ItemSearch', () => {
   it('moves the highlight with arrow keys and selects with Enter', async () => {
     const onSelectItem = vi.fn()
     render(<ItemSearch onSelectItem={onSelectItem} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
     await waitFor(() => screen.getByRole('listbox'))
 
     const input = screen.getByLabelText('Search everything')
@@ -119,24 +158,25 @@ describe('ItemSearch', () => {
     expect(onSelectItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'i2' }))
   })
 
-  it('closes the dropdown on Escape but keeps the query', async () => {
+  it('clears the highlight on Escape but keeps the query and results', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
     await waitFor(() => screen.getByRole('listbox'))
 
-    fireEvent.keyDown(screen.getByLabelText('Search everything'), { key: 'Escape' })
+    const input = screen.getByLabelText('Search everything')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Escape' })
 
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Search everything')).toHaveValue('dune')
+    expect(input).not.toHaveAttribute('aria-activedescendant')
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    expect(input).toHaveValue('dune')
   })
 
   it('prompts a logged-out user to log in when nothing matches', async () => {
     setAuth(null)
     vi.mocked(searchService.searchItems).mockResolvedValue({ data: [], error: null })
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('nope')
-    vi.advanceTimersByTime(400)
+    search('nope')
 
     await waitFor(() => {
       expect(screen.getByText(/Nothing here yet/)).toBeInTheDocument()
@@ -148,8 +188,7 @@ describe('ItemSearch', () => {
   it('asks which topic it is when nothing matches an all-topics search', async () => {
     vi.mocked(searchService.searchItems).mockResolvedValue({ data: [], error: null })
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('nope')
-    vi.advanceTimersByTime(400)
+    search('nope')
 
     await waitFor(() => {
       expect(screen.getByText(/Which topic is it/)).toBeInTheDocument()
@@ -166,8 +205,7 @@ describe('ItemSearch', () => {
     expect(input).toHaveAttribute('role', 'combobox')
     expect(input).toHaveAttribute('aria-expanded', 'false')
 
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
     await waitFor(() => screen.getByRole('listbox'))
 
     expect(input).toHaveAttribute('aria-expanded', 'true')
@@ -176,8 +214,7 @@ describe('ItemSearch', () => {
 
   it('sets aria-activedescendant to the highlighted option and updates with arrow keys', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
     await waitFor(() => screen.getByRole('listbox'))
 
     const input = screen.getByLabelText('Search everything')
@@ -191,16 +228,19 @@ describe('ItemSearch', () => {
     expect(input).toHaveAttribute('aria-activedescendant', options[1].id)
   })
 
-  it('gives each topic group an accessible name', async () => {
+  it('gives each topic section an accessible name', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
     await waitFor(() => screen.getByRole('listbox'))
 
     const groups = within(screen.getByRole('listbox')).getAllByRole('group')
-    const names = groups.map((group) => group.getAttribute('aria-label') ??
-      document.getElementById(group.getAttribute('aria-labelledby') ?? '')?.textContent)
-    expect(names.sort()).toEqual(['Books', 'Movies'])
+    const names = groups.map((group) =>
+      document.getElementById(group.getAttribute('aria-labelledby') ?? '')?.textContent
+    )
+    expect(names.map((name) => name?.replace(/[^A-Za-z]/g, '')).sort()).toEqual([
+      'Books',
+      'Movies'
+    ])
   })
 
   it('skips a result whose topic is missing rather than crashing', async () => {
@@ -209,8 +249,7 @@ describe('ItemSearch', () => {
       error: null
     })
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    await type('dune')
-    vi.advanceTimersByTime(400)
+    search('dune')
 
     await waitFor(() => {
       expect(screen.getByRole('listbox')).toBeInTheDocument()
@@ -225,8 +264,7 @@ describe('ItemSearch', () => {
     await waitFor(() => screen.getByRole('button', { name: 'Search Movies only' }))
     fireEvent.click(screen.getByRole('button', { name: 'Search Movies only' }))
 
-    await type('nope')
-    vi.advanceTimersByTime(400)
+    search('nope')
 
     await waitFor(() => {
       expect(screen.getByTestId('enrichment-prompt')).toHaveTextContent('Movies')
