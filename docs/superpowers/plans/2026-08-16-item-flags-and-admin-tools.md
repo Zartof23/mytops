@@ -15,6 +15,7 @@
 - All work happens on branch `feat/item-flags-and-admin-tools`.
 - Frontend commands run from `frontend/`: `npm test -- --run`, `npm run build`.
 - Migrations go in `supabase/migrations/` named `YYYYMMDDHHMMSS_description.sql`. Use the `20260816NNNNNN` prefixes given in each task so ordering is deterministic.
+- **Everything that lives in Supabase must live in git.** No schema change, function, policy, or trigger may be created only in the dashboard SQL editor. After Task 0, `npx supabase db reset` must be able to rebuild the whole database from `supabase/migrations/` alone; any task that breaks that has to fix it before committing. Edge Functions likewise live under `supabase/functions/` before they are deployed.
 - Every new table has `alter table ... enable row level security` and explicit policies. No table ships without RLS.
 - Every `security definer` function sets `set search_path = public`. This is not optional — without it a `security definer` function is exploitable via search_path manipulation.
 - Services follow the existing pattern in `frontend/src/services/`: an exported object literal of async methods, importing `supabase` from `../lib/supabase`. Methods that the UI must branch on return `{ data, error }`; methods that are fire-and-forget may throw (see `enrichmentService` for the throwing style).
@@ -31,6 +32,7 @@
 ## File Structure
 
 **Migrations (create):**
+- `supabase/migrations/20260816000000_remote_baseline_schema.sql` — snapshot of the untracked existing schema, so the repo alone can rebuild the database.
 - `supabase/migrations/20260816000001_add_is_admin_to_profiles.sql` — column, `is_admin()` helper, self-promotion guard.
 - `supabase/migrations/20260816000002_create_item_flags.sql` — table, indexes, RLS.
 - `supabase/migrations/20260816000003_create_admin_item_functions.sql` — audit log table, `admin_item_links`, `admin_delete_item`.
@@ -61,6 +63,147 @@
 
 **Docs (create):**
 - `docs/admin-sql-verification.md` — runnable `psql` checks for the SQL that has no automated test.
+
+---
+
+### Task 0: Capture the untracked baseline schema
+
+**Files:**
+- Create: `supabase/migrations/20260816000000_remote_baseline_schema.sql`
+- Create/modify: any Edge Function directory that exists in Supabase but not in git
+- Modify: `docs/context/BACKEND_CONTEXT.md`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: a git-tracked snapshot of everything currently live in Supabase, so a fresh local environment can be rebuilt from the repo alone.
+
+**Why first:** `supabase/migrations/` currently holds seven files, but the core tables (`topics`, `items`, `profiles`, `user_ratings`, `user_enrichment_requests`) and functions like `check_enrichment_rate_limit` were created outside them. Task 6 depends on `user_ratings`' FK delete rule, and nothing in git records it. Everything after this task assumes the repo is the source of truth.
+
+- [ ] **Step 1: Install the Supabase CLI**
+
+The CLI is not currently installed. Docker is available (v27.5.1), which the local stack needs.
+
+```bash
+cd C:/Users/rober/IdeaProjects/mytops
+npm install --save-dev supabase
+npx supabase --version
+```
+
+Installing as a dev dependency (rather than globally) pins the version in the repo, which matters for reproducibility.
+
+- [ ] **Step 2: Link to the remote project**
+
+```bash
+npx supabase link --project-ref <PROJECT_REF>
+```
+
+`<PROJECT_REF>` is in the Supabase dashboard URL. This prompts for the database password — the user must supply it; do not guess or skip.
+
+- [ ] **Step 3: Reconcile the existing migration history**
+
+The seven existing migration files were applied by hand, so the remote `supabase_migrations.schema_migrations` table does not know about them. Check:
+
+```bash
+npx supabase migration list
+```
+
+Any local file showing no remote counterpart must be marked applied, or the next `db push` will try to re-run it:
+
+```bash
+npx supabase migration repair --status applied 20260101000001
+npx supabase migration repair --status applied 20260101000002
+npx supabase migration repair --status applied 20260101000003
+npx supabase migration repair --status applied 20260101000004
+npx supabase migration repair --status applied 20260105000001
+npx supabase migration repair --status applied 20260105000002
+npx supabase migration repair --status applied 20260105000003
+```
+
+Re-run `npx supabase migration list` and confirm every row shows both a local and a remote version.
+
+- [ ] **Step 4: Dump the remote schema**
+
+```bash
+npx supabase db dump --schema public -f supabase/migrations/20260816000000_remote_baseline_schema.sql
+npx supabase db dump --schema public --data-only -f /dev/null  # discard; confirms dump works
+```
+
+Then dump the pieces `--schema public` misses:
+
+```bash
+npx supabase db dump --schema storage -f supabase/schema-storage.sql
+npx supabase db dump --role-only -f supabase/schema-roles.sql
+```
+
+Open `20260816000000_remote_baseline_schema.sql` and confirm it contains: the `topics`, `items`, `profiles`, `user_ratings`, `user_enrichment_requests`, `user_todo_lists` tables; the `check_enrichment_rate_limit` function; the item-stats and ratings-batch functions from the existing migrations; and all RLS policies.
+
+- [ ] **Step 5: Make the baseline idempotent and inert**
+
+The dump will recreate objects that already exist. Add this header to the file so it documents its own role and never runs against the live database:
+
+```sql
+-- Baseline snapshot of the remote schema as of 2026-08-16.
+--
+-- This file exists so a local environment can be built from the repo alone.
+-- It is ALREADY APPLIED in production and must never be pushed there again.
+-- It is marked applied via:
+--   npx supabase migration repair --status applied 20260816000000
+--
+-- Objects created before this date were made by hand in the dashboard and
+-- were not tracked. Everything from 20260816000001 onward is a real,
+-- forward-only migration.
+```
+
+Then mark it applied so it never re-runs remotely:
+
+```bash
+npx supabase migration repair --status applied 20260816000000
+```
+
+- [ ] **Step 6: Record the user_ratings FK delete rule**
+
+This is the fact Task 6 needs. Find the `user_ratings` foreign key on `item_id` in the baseline dump and note whether it says `ON DELETE CASCADE`.
+
+- If it does: Task 6 Step 1 is already answered — record the answer in `docs/context/BACKEND_CONTEXT.md` and skip the corrective `alter`.
+- If it does not: Task 6 Step 1's corrective `alter` is required, and it belongs in migration `20260816000003` as a real forward migration.
+
+- [ ] **Step 7: Sync any untracked Edge Functions**
+
+```bash
+npx supabase functions list
+```
+
+For every function listed that has no directory under `supabase/functions/`, download it:
+
+```bash
+npx supabase functions download <function-name>
+```
+
+Only `ai-enrich-item` is expected. If anything else appears, it must land in git before Task 7 touches the shared modules.
+
+- [ ] **Step 8: Verify the local stack builds from the repo**
+
+This is the whole point of the task — prove the repo is sufficient:
+
+```bash
+npx supabase start
+npx supabase db reset
+```
+
+`db reset` rebuilds a local database from `supabase/migrations/` alone. It must complete without error. If it fails, the baseline is incomplete — fix it now, because every later task assumes a working local environment.
+
+Then stop the stack when done: `npx supabase stop`.
+
+- [ ] **Step 9: Document and commit**
+
+Add a "Local development" section to `docs/context/BACKEND_CONTEXT.md` recording: the link/repair/reset workflow above, the rule that **all** future schema changes go through `supabase/migrations/` (never the dashboard SQL editor), and the `user_ratings` FK finding from Step 6.
+
+```bash
+git add supabase/ docs/context/BACKEND_CONTEXT.md package.json package-lock.json
+git commit -m "chore: capture remote Supabase baseline schema in git"
+```
+
+Note: `supabase/.temp/` and any generated `.env` from `supabase start` must not be committed — add them to `.gitignore` if `git status` shows them.
 
 ---
 
@@ -161,7 +304,9 @@ git commit -m "feat: add is_admin flag and is_admin() helper to profiles"
 
 **Interfaces:**
 - Consumes: `profiles.is_admin` from Task 1.
-- Produces: `useAuthStore()` gains `profile: Profile | null` and `isAdmin: boolean`. `Profile` gains `is_admin: boolean`.
+- Produces: `useAuthStore()` gains `profile: Profile | null`, `isAdmin: boolean`, and `profileLoading: boolean`. `Profile` gains `is_admin: boolean`.
+
+**Why `profileLoading` exists:** on page reload the profile is awaited before `initialized` flips, so `isAdmin` is settled. But on a *fresh sign-in* there is no reload — `initialized` is already `true` and the profile arrives asynchronously from the `onAuthStateChange` callback. Without a separate flag, an admin who signs in and goes straight to `/admin` is redirected home because `isAdmin` is still `false`, and only a reload fixes it. `AdminRoute` must wait on `profileLoading`, not on `initialized`.
 
 - [ ] **Step 1: Add `is_admin` to the Profile type**
 
@@ -244,6 +389,33 @@ describe('authStore isAdmin', () => {
     expect(useAuthStore.getState().profile).toBeNull()
   })
 
+  it('holds profileLoading true until a signed-in profile resolves', async () => {
+    let resolveProfile: (v: unknown) => void = () => {}
+    const maybeSingle = vi.fn(() => new Promise((r) => { resolveProfile = r }))
+    const eq = vi.fn(() => ({ maybeSingle }))
+    const select = vi.fn(() => ({ eq }))
+    vi.mocked(supabase.from).mockReturnValue({ select } as never)
+    vi.mocked(supabase.auth.getSession).mockResolvedValue(sessionWith('u1') as never)
+
+    const done = useAuthStore.getState().initialize()
+    await Promise.resolve()
+    expect(useAuthStore.getState().profileLoading).toBe(true)
+
+    resolveProfile({ data: { id: 'u1', is_admin: true }, error: null })
+    await done
+
+    expect(useAuthStore.getState().profileLoading).toBe(false)
+    expect(useAuthStore.getState().isAdmin).toBe(true)
+  })
+
+  it('leaves profileLoading false when there is no session to load', async () => {
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null }, error: null } as never)
+
+    await useAuthStore.getState().initialize()
+
+    expect(useAuthStore.getState().profileLoading).toBe(false)
+  })
+
   it('clears profile and isAdmin on sign out', async () => {
     useAuthStore.setState({ profile: { id: 'u1', is_admin: true } as never, isAdmin: true })
 
@@ -275,6 +447,7 @@ Add to `interface AuthState`, after `user` and `session`:
 ```ts
   profile: Profile | null
   isAdmin: boolean
+  profileLoading: boolean
 ```
 
 Add a module-level helper above `export const useAuthStore`:
@@ -300,21 +473,26 @@ Add to the initial state, next to `user: null`:
 ```ts
   profile: null,
   isAdmin: false,
+  profileLoading: false,
 ```
 
 In `initialize`, replace the `set({ session, user: ..., initialized: true })` call with:
 
 ```ts
       const user = session?.user ?? null
+      set({ profileLoading: !!user })
       const profile = user ? await fetchProfile(user.id) : null
       set({
         session,
         user,
         profile,
         isAdmin: profile?.is_admin ?? false,
+        profileLoading: false,
         initialized: true
       })
 ```
+
+Also set `profileLoading: false` in the `catch` block that already sets `initialized: true`, or a failed initialize leaves `AdminRoute` rendering nothing forever.
 
 and replace the body of the `onAuthStateChange` callback with:
 
@@ -323,12 +501,14 @@ and replace the body of the `onAuthStateChange` callback with:
         const nextUser = session?.user ?? null
         set({ session, user: nextUser })
         if (!nextUser) {
-          set({ profile: null, isAdmin: false })
+          set({ profile: null, isAdmin: false, profileLoading: false })
           return
         }
-        // Not awaited: the auth callback must stay synchronous.
+        // Not awaited: awaiting inside this callback deadlocks the client.
+        // profileLoading covers the gap so AdminRoute doesn't redirect early.
+        set({ profileLoading: true })
         void fetchProfile(nextUser.id).then((profile) => {
-          set({ profile, isAdmin: profile?.is_admin ?? false })
+          set({ profile, isAdmin: profile?.is_admin ?? false, profileLoading: false })
         })
       })
 ```
@@ -336,13 +516,13 @@ and replace the body of the `onAuthStateChange` callback with:
 In `signOut`, change the final `set` to:
 
 ```ts
-    set({ user: null, session: null, profile: null, isAdmin: false })
+    set({ user: null, session: null, profile: null, isAdmin: false, profileLoading: false })
 ```
 
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `cd frontend && npm test -- --run src/store/authStore.test.ts`
-Expected: PASS, 4 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 6: Run the full suite**
 
@@ -1128,7 +1308,7 @@ git commit -m "feat: add item flag modal with bug-icon trigger"
 
 - [ ] **Step 1: Verify the user_ratings FK cascades**
 
-`user_ratings` was created outside tracked migrations. Confirm its `item_id` FK deletes on cascade:
+Task 0 Step 6 should already have answered this from the baseline dump. If it did and the FK cascades, note that here and move to Step 2. Otherwise confirm directly:
 
 ```sql
 select conname, confdeltype from pg_constraint
@@ -2537,7 +2717,7 @@ git commit -m "feat: add rescan diff review with per-field selection"
 - Test: `frontend/src/components/RouteGuards.test.tsx` (create)
 
 **Interfaces:**
-- Consumes: `useAuthStore().isAdmin` and `.initialized` (Task 2).
+- Consumes: `useAuthStore().isAdmin`, `.initialized` and `.profileLoading` (Task 2).
 - Produces: `export function AdminRoute()`.
 
 - [ ] **Step 1: Write the failing test**
@@ -2566,19 +2746,32 @@ function renderAt(path: string) {
 
 describe('AdminRoute', () => {
   beforeEach(() => {
-    useAuthStore.setState({ user: null, isAdmin: false, initialized: true })
+    useAuthStore.setState({ user: null, isAdmin: false, initialized: true, profileLoading: false })
   })
 
   it('renders the route for an admin', () => {
-    useAuthStore.setState({ user: { id: 'u1' } as never, isAdmin: true, initialized: true })
+    useAuthStore.setState({ user: { id: 'u1' } as never, isAdmin: true, initialized: true, profileLoading: false })
 
     renderAt('/admin')
 
     expect(screen.getByText('admin area')).toBeInTheDocument()
   })
 
+  it('waits instead of redirecting while a fresh sign-in profile loads', () => {
+    // The regression this guards: initialized is already true after sign-in,
+    // and isAdmin is still false until the profile lands.
+    useAuthStore.setState({
+      user: { id: 'u1' } as never, isAdmin: false, initialized: true, profileLoading: true
+    })
+
+    renderAt('/admin')
+
+    expect(screen.queryByText('home')).not.toBeInTheDocument()
+    expect(screen.queryByText('admin area')).not.toBeInTheDocument()
+  })
+
   it('redirects a signed-in non-admin home', () => {
-    useAuthStore.setState({ user: { id: 'u2' } as never, isAdmin: false, initialized: true })
+    useAuthStore.setState({ user: { id: 'u2' } as never, isAdmin: false, initialized: true, profileLoading: false })
 
     renderAt('/admin')
 
@@ -2593,7 +2786,7 @@ describe('AdminRoute', () => {
   })
 
   it('renders nothing rather than redirecting while auth is still initializing', () => {
-    useAuthStore.setState({ user: null, isAdmin: false, initialized: false })
+    useAuthStore.setState({ user: null, isAdmin: false, initialized: false, profileLoading: false })
 
     renderAt('/admin')
 
@@ -2623,9 +2816,12 @@ Append to `frontend/src/components/RouteGuards.tsx`:
  * an empty page, not data.
  */
 export function AdminRoute() {
-  const { isAdmin, initialized } = useAuthStore()
+  const { isAdmin, initialized, profileLoading } = useAuthStore()
 
-  if (!initialized) {
+  // profileLoading matters on fresh sign-in, where initialized is already
+  // true but isAdmin has not resolved yet. Redirecting here would bounce an
+  // admin off their own page until they reloaded.
+  if (!initialized || profileLoading) {
     return null // App.tsx handles the loading state
   }
 
@@ -2640,7 +2836,7 @@ export function AdminRoute() {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd frontend && npm test -- --run src/components/RouteGuards.test.tsx`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Commit**
 
