@@ -14,8 +14,9 @@
 
 - All work happens on branch `feat/item-flags-and-admin-tools`.
 - Frontend commands run from `frontend/`: `npm test -- --run`, `npm run build`.
-- Migrations go in `supabase/migrations/` named `YYYYMMDDHHMMSS_description.sql`. Use the `20260816NNNNNN` prefixes given in each task so ordering is deterministic.
-- **Everything that lives in Supabase must live in git.** No schema change, function, policy, or trigger may be created only in the dashboard SQL editor. After Task 0, `npx supabase db reset` must be able to rebuild the whole database from `supabase/migrations/` alone; any task that breaks that has to fix it before committing. Edge Functions likewise live under `supabase/functions/` before they are deployed.
+- **Applying a migration:** use the Supabase MCP tool `mcp__supabase__apply_migration` with the snake_case name given in the task (e.g. `add_is_admin_to_profiles`). It assigns the version timestamp and records the SQL in the remote history. Then save the identical SQL to `supabase/migrations/<assigned_version>_<name>.sql` — confirm the assigned version with `mcp__supabase__list_migrations` and use it verbatim, so git and the remote history stay one-to-one (the invariant Task 0 establishes). The `20260816NNNNNN` filenames in later tasks are placeholders for ordering; the real filename is whatever version the tool assigns.
+- Never apply DDL with `mcp__supabase__execute_sql` — it bypasses the migration history, which is exactly the drift Task 0 exists to clean up. Use `execute_sql` only for reads and verification queries.
+- **Everything that lives in Supabase must live in git.** No schema change, function, policy, or trigger may be created only in the dashboard SQL editor. After Task 0, `supabase/migrations/` must be able to rebuild the whole database on its own, one file per remote migration version; any task that breaks that has to fix it before committing. Edge Functions likewise live under `supabase/functions/` before they are deployed.
 - Every new table has `alter table ... enable row level security` and explicit policies. No table ships without RLS.
 - Every `security definer` function sets `set search_path = public`. This is not optional — without it a `security definer` function is exploitable via search_path manipulation.
 - Services follow the existing pattern in `frontend/src/services/`: an exported object literal of async methods, importing `supabase` from `../lib/supabase`. Methods that the UI must branch on return `{ data, error }`; methods that are fire-and-forget may throw (see `enrichmentService` for the throwing style).
@@ -66,144 +67,126 @@
 
 ---
 
-### Task 0: Capture the untracked baseline schema
+### Task 0: Recover the real migration history into git
 
 **Files:**
-- Create: `supabase/migrations/20260816000000_remote_baseline_schema.sql`
-- Create/modify: any Edge Function directory that exists in Supabase but not in git
-- Modify: `docs/context/BACKEND_CONTEXT.md`
+- Create: fifteen files in `supabase/migrations/`, one per remote migration, named `<version>_<name>.sql`
+- Delete: the seven existing files in `supabase/migrations/` (superseded — see Step 3)
+- Modify: `docs/context/BACKEND_CONTEXT.md`, `.gitignore`
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: a git-tracked snapshot of everything currently live in Supabase, so a fresh local environment can be rebuilt from the repo alone.
+- Produces: `supabase/migrations/` matching the remote `supabase_migrations.schema_migrations` history exactly, so a fresh local database can be rebuilt from the repo alone.
 
-**Why first:** `supabase/migrations/` currently holds seven files, but the core tables (`topics`, `items`, `profiles`, `user_ratings`, `user_enrichment_requests`) and functions like `check_enrichment_rate_limit` were created outside them. Task 6 depends on `user_ratings`' FK delete rule, and nothing in git records it. Everything after this task assumes the repo is the source of truth.
+**Context — read before starting.** The remote database has a proper 15-migration history. It was applied through the Supabase MCP tooling, which records each migration's full SQL in `supabase_migrations.schema_migrations.statements`. The local `supabase/migrations/` directory holds only seven files, with **different version numbers** than the remote history, and one file that was never applied at all. So the fix is not a schema dump — it is recovering the authoritative SQL that already exists, which preserves the comments, ordering, and intent that a dump would flatten.
 
-- [ ] **Step 1: Install the Supabase CLI**
+Use the Supabase MCP tools (`mcp__supabase__execute_sql`) for all reads in this task. Do not install or run the Supabase CLI here.
 
-The CLI is not currently installed. Docker is available (v27.5.1), which the local stack needs.
+The remote history, in order:
 
-```bash
-cd C:/Users/rober/IdeaProjects/mytops
-npm install --save-dev supabase
-npx supabase --version
-```
+| Version | Name |
+|---|---|
+| 20251229001149 | initial_schema |
+| 20251229001250 | rls_policies |
+| 20251229001313 | seed_topics |
+| 20251229001459 | fix_function_search_path |
+| 20251229103549 | seed_test_items |
+| 20260101222708 | create_user_todo_lists |
+| 20260101222811 | add_topic_image_url |
+| 20260101222813 | create_item_stats_function |
+| 20260101222817 | create_user_ratings_batch_function |
+| 20260104185858 | create_storage_buckets_for_images |
+| 20260104185916 | add_storage_rls_policies |
+| 20260111220605 | create_app_config_table |
+| 20260111220629 | create_user_enrichment_requests_table |
+| 20260111220714 | create_check_enrichment_rate_limit_function |
+| 20260111220735 | add_review_pending_to_items |
 
-Installing as a dev dependency (rather than globally) pins the version in the repo, which matters for reproducibility.
+- [ ] **Step 1: Read each migration's SQL from the remote history**
 
-- [ ] **Step 2: Link to the remote project**
-
-```bash
-npx supabase link --project-ref <PROJECT_REF>
-```
-
-`<PROJECT_REF>` is in the Supabase dashboard URL. This prompts for the database password — the user must supply it; do not guess or skip.
-
-- [ ] **Step 3: Reconcile the existing migration history**
-
-The seven existing migration files were applied by hand, so the remote `supabase_migrations.schema_migrations` table does not know about them. Check:
-
-```bash
-npx supabase migration list
-```
-
-Any local file showing no remote counterpart must be marked applied, or the next `db push` will try to re-run it:
-
-```bash
-npx supabase migration repair --status applied 20260101000001
-npx supabase migration repair --status applied 20260101000002
-npx supabase migration repair --status applied 20260101000003
-npx supabase migration repair --status applied 20260101000004
-npx supabase migration repair --status applied 20260105000001
-npx supabase migration repair --status applied 20260105000002
-npx supabase migration repair --status applied 20260105000003
-```
-
-Re-run `npx supabase migration list` and confirm every row shows both a local and a remote version.
-
-- [ ] **Step 4: Dump the remote schema**
-
-```bash
-npx supabase db dump --schema public -f supabase/migrations/20260816000000_remote_baseline_schema.sql
-npx supabase db dump --schema public --data-only -f /dev/null  # discard; confirms dump works
-```
-
-Then dump the pieces `--schema public` misses:
-
-```bash
-npx supabase db dump --schema storage -f supabase/schema-storage.sql
-npx supabase db dump --role-only -f supabase/schema-roles.sql
-```
-
-Open `20260816000000_remote_baseline_schema.sql` and confirm it contains: the `topics`, `items`, `profiles`, `user_ratings`, `user_enrichment_requests`, `user_todo_lists` tables; the `check_enrichment_rate_limit` function; the item-stats and ratings-batch functions from the existing migrations; and all RLS policies.
-
-- [ ] **Step 5: Make the baseline idempotent and inert**
-
-The dump will recreate objects that already exist. Add this header to the file so it documents its own role and never runs against the live database:
+For each version in the table above, fetch its statements:
 
 ```sql
--- Baseline snapshot of the remote schema as of 2026-08-16.
---
--- This file exists so a local environment can be built from the repo alone.
--- It is ALREADY APPLIED in production and must never be pushed there again.
--- It is marked applied via:
---   npx supabase migration repair --status applied 20260816000000
---
--- Objects created before this date were made by hand in the dashboard and
--- were not tracked. Everything from 20260816000001 onward is a real,
--- forward-only migration.
+select array_to_string(statements, E';\n\n') || ';' as sql
+from supabase_migrations.schema_migrations
+where version = '20251229001149';
 ```
 
-Then mark it applied so it never re-runs remotely:
+Fetch them one at a time. Fetching all fifteen in one query produces a single enormous result that is easy to mis-split between files.
+
+- [ ] **Step 2: Write one file per migration**
+
+Write each to `supabase/migrations/<version>_<name>.sql`, using the exact version and name from the table — for example `supabase/migrations/20251229001149_initial_schema.sql`.
+
+Write the SQL exactly as retrieved. Do not reformat it, do not add `if not exists` clauses, and do not "improve" anything: these files must reproduce the database that actually exists. The only permitted addition is a two-line header on each file:
+
+```sql
+-- Recovered from the remote migration history on 2026-08-16.
+-- Already applied in production; do not re-apply remotely.
+```
+
+- [ ] **Step 3: Delete the seven superseded files**
 
 ```bash
-npx supabase migration repair --status applied 20260816000000
+git rm supabase/migrations/20260101000001_create_user_todo_lists.sql
+git rm supabase/migrations/20260101000002_add_topic_image_url.sql
+git rm supabase/migrations/20260101000003_create_item_stats_function.sql
+git rm supabase/migrations/20260101000004_create_user_ratings_batch_function.sql
+git rm supabase/migrations/20260105000001_create_storage_buckets_for_images.sql
+git rm supabase/migrations/20260105000002_add_storage_rls_policies.sql
+git rm supabase/migrations/20260105000003_add_rls_policies_for_core_tables.sql
 ```
 
-- [ ] **Step 6: Record the user_ratings FK delete rule**
+The first six duplicate remote migrations under invented version numbers — keeping both would apply the same DDL twice on a local rebuild. The seventh (`add_rls_policies_for_core_tables`) has no remote counterpart at all: its own header admits it was written to "version" policies that already existed, and it was never applied. The real policies live in `20251229001250_rls_policies`, which Step 2 recovers. Deleting it removes a file that would fail on a fresh database.
 
-This is the fact Task 6 needs. Find the `user_ratings` foreign key on `item_id` in the baseline dump and note whether it says `ON DELETE CASCADE`.
-
-- If it does: Task 6 Step 1 is already answered — record the answer in `docs/context/BACKEND_CONTEXT.md` and skip the corrective `alter`.
-- If it does not: Task 6 Step 1's corrective `alter` is required, and it belongs in migration `20260816000003` as a real forward migration.
-
-- [ ] **Step 7: Sync any untracked Edge Functions**
+- [ ] **Step 4: Verify the recovered set is complete and ordered**
 
 ```bash
-npx supabase functions list
+ls supabase/migrations/
 ```
 
-For every function listed that has no directory under `supabase/functions/`, download it:
+Expect exactly fifteen files, and confirm that sorting them lexically produces the same order as the table above.
+
+Spot-check three against the live database: `20251229001149_initial_schema.sql` must create `topics`, `items`, `profiles`, and `user_ratings`; `20260111220714_create_check_enrichment_rate_limit_function.sql` must define `check_enrichment_rate_limit`; `20260111220735_add_review_pending_to_items.sql` must add the `review_pending` column that `ai-enrich-item/index.ts` writes to.
+
+Confirm no file is empty or truncated — a zero-length file means the Step 1 fetch silently returned nothing for that version.
+
+- [ ] **Step 5: Record the FK delete rules**
+
+These are already established from the live database and are needed by Task 6. Record them in `docs/context/BACKEND_CONTEXT.md` rather than re-deriving them:
+
+| Constraint | On delete |
+|---|---|
+| `user_ratings_item_id_fkey` | CASCADE |
+| `user_todo_lists_item_id_fkey` | CASCADE |
+| `user_enrichment_requests_result_item_id_fkey` | SET NULL |
+
+**This resolves Task 6 Step 1: the cascade is already correct and no corrective `alter` is needed.** Deleting an item removes its ratings and TODO entries, and nulls `result_item_id` on any enrichment request that produced it.
+
+- [ ] **Step 6: Document the workflow**
+
+Add a "Database changes" section to `docs/context/BACKEND_CONTEXT.md` recording:
+
+- `supabase/migrations/` mirrors the remote migration history, one file per version, and is the source of truth for rebuilding a local database.
+- Every schema change ships as a new migration file committed to git. Nothing is created only in the dashboard.
+- The FK table from Step 5.
+- That the fifteen recovered files are already applied remotely and must never be re-applied there.
+
+Also add to `.gitignore` if not already present:
+
+```
+.superpowers/
+supabase/.temp/
+```
+
+- [ ] **Step 7: Commit**
 
 ```bash
-npx supabase functions download <function-name>
+git add supabase/migrations docs/context/BACKEND_CONTEXT.md .gitignore
+git commit -m "chore: recover the full Supabase migration history into git"
 ```
 
-Only `ai-enrich-item` is expected. If anything else appears, it must land in git before Task 7 touches the shared modules.
-
-- [ ] **Step 8: Verify the local stack builds from the repo**
-
-This is the whole point of the task — prove the repo is sufficient:
-
-```bash
-npx supabase start
-npx supabase db reset
-```
-
-`db reset` rebuilds a local database from `supabase/migrations/` alone. It must complete without error. If it fails, the baseline is incomplete — fix it now, because every later task assumes a working local environment.
-
-Then stop the stack when done: `npx supabase stop`.
-
-- [ ] **Step 9: Document and commit**
-
-Add a "Local development" section to `docs/context/BACKEND_CONTEXT.md` recording: the link/repair/reset workflow above, the rule that **all** future schema changes go through `supabase/migrations/` (never the dashboard SQL editor), and the `user_ratings` FK finding from Step 6.
-
-```bash
-git add supabase/ docs/context/BACKEND_CONTEXT.md package.json package-lock.json
-git commit -m "chore: capture remote Supabase baseline schema in git"
-```
-
-Note: `supabase/.temp/` and any generated `.env` from `supabase start` must not be committed — add them to `.gitignore` if `git status` shows them.
+This task does **not** deploy or apply anything. It only brings git in line with what is already live.
 
 ---
 
@@ -259,7 +242,7 @@ with check (
 
 - [ ] **Step 2: Apply the migration**
 
-Apply via the Supabase dashboard SQL editor or `supabase db push`. Then verify in the SQL editor:
+Apply with `mcp__supabase__apply_migration`, name `add_is_admin_to_profiles`. Then confirm the assigned version with `mcp__supabase__list_migrations` and rename the local file to `<assigned_version>_add_is_admin_to_profiles.sql`. Verify with `mcp__supabase__execute_sql`:
 
 ```sql
 select public.is_admin();  -- false for a non-admin session
@@ -601,7 +584,7 @@ with check (public.is_admin());
 
 - [ ] **Step 2: Apply and verify**
 
-Apply the migration, then in the SQL editor confirm RLS is on and four indexes exist:
+Apply with `mcp__supabase__apply_migration`, name `create_item_flags`, then rename the local file to the assigned version. Confirm RLS is on and the indexes exist:
 
 ```sql
 select relrowsecurity from pg_class where relname = 'item_flags';  -- t
@@ -1306,23 +1289,25 @@ git commit -m "feat: add item flag modal with bug-icon trigger"
   - `public.admin_delete_item(p_item_id uuid, p_force boolean default false) returns jsonb`.
   - table `public.admin_audit_log`.
 
-- [ ] **Step 1: Verify the user_ratings FK cascades**
+- [ ] **Step 1: Confirm the FK delete rules (already resolved)**
 
-Task 0 Step 6 should already have answered this from the baseline dump. If it did and the FK cascades, note that here and move to Step 2. Otherwise confirm directly:
+This was checked against the live database on 2026-08-16 and recorded by Task 0 Step 5. The result:
+
+| Constraint | On delete |
+|---|---|
+| `user_ratings_item_id_fkey` | CASCADE |
+| `user_todo_lists_item_id_fkey` | CASCADE |
+| `user_enrichment_requests_result_item_id_fkey` | SET NULL |
+
+**No corrective `alter` is needed.** The forced delete will cascade cleanly. Re-confirm in one query and move on:
 
 ```sql
-select conname, confdeltype from pg_constraint
-where conrelid = 'public.user_ratings'::regclass and contype = 'f';
+select c.conname, c.confdeltype from pg_constraint c
+join pg_class t on t.oid = c.conrelid
+where c.contype = 'f' and t.relname in ('user_ratings','user_todo_lists');
 ```
 
-`confdeltype` must be `c` for the `item_id` constraint. If it is `a` (no action) or `r` (restrict), the forced delete will fail with a FK violation — add this to the top of the migration in Step 2, substituting the real constraint name:
-
-```sql
-alter table public.user_ratings drop constraint <constraint_name>;
-alter table public.user_ratings
-  add constraint <constraint_name> foreign key (item_id)
-  references public.items(id) on delete cascade;
-```
+Every `*_item_id_fkey` row must show `confdeltype = c`. If any does not, stop and report — the plan's delete behaviour depends on it.
 
 - [ ] **Step 2: Write the migration**
 
@@ -1457,7 +1442,7 @@ grant execute on function public.admin_delete_item(uuid, boolean) to authenticat
 
 - [ ] **Step 3: Apply the migration**
 
-Apply it, then confirm both functions exist:
+Apply with `mcp__supabase__apply_migration`, name `create_admin_item_functions`, then rename the local file to the assigned version. Confirm both functions exist:
 
 ```sql
 select proname, prosecdef from pg_proc
@@ -1654,7 +1639,7 @@ Keep everything else — `checkExistingItem`, `validateInput`, the rate limiting
 
 - [ ] **Step 7: Deploy and regression-test**
 
-Deploy: `supabase functions deploy ai-enrich-item` (or via the dashboard).
+Deploy with `mcp__supabase__deploy_edge_function`, name `ai-enrich-item`, `verify_jwt: true`, entrypoint `index.ts`. Pass **every** file in the `files` array — the entrypoint plus each `_shared/*.ts` module it now imports, with `name` values matching the relative import paths (`../_shared/cors.ts` etc.). A deploy that omits a shared module fails at runtime, not at deploy time.
 
 Repeat the Step 1 exercise with a different non-existent item. Confirm: an item is created, metadata keys match the topic schema, an image is stored when one is found. Any difference in shape means the move was not clean — revert and redo.
 
@@ -1876,9 +1861,7 @@ Deno.serve(async (req: Request) => {
 
 - [ ] **Step 2: Deploy**
 
-```bash
-supabase functions deploy admin-rescan-item
-```
+Deploy with `mcp__supabase__deploy_edge_function`, name `admin-rescan-item`, `verify_jwt: true`, entrypoint `index.ts`. Include the entrypoint and every `_shared/*.ts` module it imports in the `files` array, with names matching the relative import paths.
 
 - [ ] **Step 3: Verify the authorization boundary**
 
