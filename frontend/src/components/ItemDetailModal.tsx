@@ -1,11 +1,13 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
 import { LazyImage } from './LazyImage'
+import { FlagItemModal } from './FlagItemModal'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getItemImageUrl } from '@/lib/itemImage'
-import { Plus, Check, X } from 'lucide-react'
+import { Plus, Check, X, Bug } from 'lucide-react'
 import type { Item, Topic } from '@/types'
 
 interface ItemDetailModalProps {
@@ -21,6 +23,8 @@ interface ItemDetailModalProps {
   onAddToTodo?: () => void
   onRemoveFromTodo?: () => void
   isAuthenticated?: boolean
+  alreadyFlagged?: boolean
+  onRequireLogin?: () => void
 }
 
 // Topic-specific metadata field configurations
@@ -109,16 +113,19 @@ const ItemDetailModalComponent = ({
   isInTodo = false,
   onAddToTodo,
   onRemoveFromTodo,
-  isAuthenticated = false
+  isAuthenticated = false,
+  alreadyFlagged = false,
+  onRequireLogin
 }: ItemDetailModalProps) => {
-  if (!item) return null
+  const [flagOpen, setFlagOpen] = useState(false)
+  const [flagged, setFlagged] = useState(alreadyFlagged)
 
-  const topicSlug = item.topic?.slug || ''
+  const topicSlug = item?.topic?.slug || ''
   const metadataFields = useMemo(
     () => topicMetadataConfig[topicSlug] || [],
     [topicSlug]
   )
-  const imageUrl = useMemo(() => getItemImageUrl(item), [item])
+  const imageUrl = useMemo(() => (item ? getItemImageUrl(item) : ''), [item])
 
   const handleTodoClick = useCallback(() => {
     if (isInTodo) {
@@ -127,6 +134,16 @@ const ItemDetailModalComponent = ({
       onAddToTodo?.()
     }
   }, [isInTodo, onRemoveFromTodo, onAddToTodo])
+
+  const handleFlagClick = useCallback(() => {
+    if (!isAuthenticated) {
+      onRequireLogin?.()
+      return
+    }
+    setFlagOpen(true)
+  }, [isAuthenticated, onRequireLogin])
+
+  if (!item) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -244,8 +261,40 @@ const ItemDetailModalComponent = ({
               </div>
             </div>
           )}
+
+          <div className="flex justify-end">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-muted-foreground"
+                  onClick={handleFlagClick}
+                  disabled={flagged}
+                  aria-label={flagged ? 'You already reported this item' : 'Report incorrect information'}
+                >
+                  <Bug className={`h-4 w-4 ${flagged ? 'fill-current' : ''}`} />
+                  {flagged ? 'Reported' : 'Report a problem'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {flagged
+                  ? "Already in the queue. We'll get to it."
+                  : isAuthenticated
+                    ? 'Something wrong with this info?'
+                    : 'You need to log in for this. I know, I know, another login.'}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </DialogContent>
+
+      <FlagItemModal
+        item={item}
+        open={flagOpen}
+        onOpenChange={setFlagOpen}
+        onFlagged={() => setFlagged(true)}
+      />
     </Dialog>
   )
 }
@@ -262,6 +311,8 @@ export const ItemDetailModal = memo(ItemDetailModalComponent, (prevProps, nextPr
     prevProps.userRating === nextProps.userRating &&
     prevProps.isInTodo === nextProps.isInTodo &&
     prevProps.isAuthenticated === nextProps.isAuthenticated &&
+    prevProps.alreadyFlagged === nextProps.alreadyFlagged &&
+    prevProps.onRequireLogin === nextProps.onRequireLogin &&
     prevProps.onOpenChange === nextProps.onOpenChange &&
     prevProps.onRatingChange === nextProps.onRatingChange &&
     prevProps.onRemoveRating === nextProps.onRemoveRating &&
