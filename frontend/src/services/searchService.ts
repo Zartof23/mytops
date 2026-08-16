@@ -11,6 +11,12 @@ export interface SearchItemsParams {
   /** Maximum results. Defaults to 8 (the dropdown cap). */
   limit?: number
   /**
+   * Match the item name only, ignoring the description. Used by the typeahead
+   * suggestions, where a description hit produces a row whose title looks
+   * unrelated to what was typed.
+   */
+  nameOnly?: boolean
+  /**
    * Reserved for metadata-based search. Accepted and ignored today so that
    * adding it later does not change this signature at any call site.
    */
@@ -84,7 +90,7 @@ export const searchService = {
     data: SearchResultItem[]
     error: Error | null
   }> {
-    const { query, topicId, limit = DEFAULT_LIMIT } = params
+    const { query, topicId, limit = DEFAULT_LIMIT, nameOnly = false } = params
     const trimmed = query.trim()
 
     if (trimmed.length < MIN_QUERY_LENGTH) {
@@ -99,10 +105,15 @@ export const searchService = {
       const escaped = escapeForIlike(trimmed)
       const pattern = `"%${escaped}%"`
 
-      let request = supabase
-        .from('items')
-        .select('*, topic:topics(*)')
-        .or(`name.ilike.${pattern},description.ilike.${pattern}`)
+      let request = supabase.from('items').select('*, topic:topics(*)')
+
+      // Both branches go through `.or()` so the escaping above applies
+      // identically; the name-only case just drops the description clause.
+      request = request.or(
+        nameOnly
+          ? `name.ilike.${pattern}`
+          : `name.ilike.${pattern},description.ilike.${pattern}`
+      )
 
       if (topicId) {
         request = request.eq('topic_id', topicId)

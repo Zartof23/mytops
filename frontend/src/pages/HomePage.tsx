@@ -102,7 +102,8 @@ export function HomePage() {
 
       <TopicBands />
 
-      <div className="mx-auto max-w-5xl px-4">
+      {/* `relative z-10` keeps the content above the fixed TopicBands layer. */}
+      <div className="relative z-10 mx-auto max-w-5xl px-4">
         <div className="relative">
           <button
             type="button"

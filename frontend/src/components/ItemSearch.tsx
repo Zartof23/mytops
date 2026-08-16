@@ -14,6 +14,15 @@ import { Card } from '@/components/ui/card'
 import type { Item, Topic } from '@/types'
 
 const RESULT_LIMIT = 24
+/** How many typeahead suggestions to show. */
+const SUGGESTION_LIMIT = 5
+/**
+ * Over-fetch suggestions so the prefix-first ranking below has something to
+ * reorder — the server can only sort alphabetically.
+ */
+const SUGGESTION_FETCH_LIMIT = 20
+/** Idle time after a keystroke before suggestions are fetched. */
+const SUGGESTION_DEBOUNCE_MS = 200
 
 interface ItemSearchProps {
   onSelectItem: (item: SearchResultItem) => void
@@ -33,12 +42,39 @@ function getImageUrl(item: Item): string | null {
 }
 
 /**
- * Cross-topic search rendering results as cards grouped into per-topic sections.
+ * Order suggestions by how well the title matches, best first.
  *
- * The query is only sent when the user presses Enter — no debounce — so typing
- * never fires a request and the layout only shifts on an explicit action. Owns
- * the query and the fetch; the parent decides what a selection means via
- * `onSelectItem`.
+ * The server can only sort alphabetically, so a query like "dune" would put
+ * "Dune: Part Two" above "Dune". Exact titles come first, then prefix matches,
+ * then matches at a word boundary, then everything else; ties keep the
+ * alphabetical order the server returned.
+ */
+function rankByTitleMatch(
+  items: SearchResultItem[],
+  query: string
+): SearchResultItem[] {
+  const needle = query.toLowerCase()
+
+  const score = (name: string): number => {
+    const title = name.toLowerCase()
+    if (title === needle) return 0
+    if (title.startsWith(needle)) return 1
+    if (new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(title)) return 2
+    return 3
+  }
+
+  return [...items].sort((a, b) => score(a.name) - score(b.name))
+}
+
+/**
+ * Cross-topic search: a typeahead suggestion list while typing, and full
+ * per-topic result sections once a query is submitted.
+ *
+ * Suggestions match on title only and are capped at five — they are a shortcut
+ * to one specific item, not a preview of the results. The full search still
+ * only runs on Enter, so the layout shifts on an explicit action rather than on
+ * every keystroke. Owns the query and both fetches; the parent decides what a
+ * selection means via `onSelectItem`.
  */
 export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   const { user } = useAuthStore()
@@ -51,6 +87,11 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  /** Title-only typeahead matches for whatever is currently typed. */
+  const [suggestions, setSuggestions] = useState<SearchResultItem[]>([])
+  /** Query the user dismissed suggestions for with Escape. */
+  const [dismissedQuery, setDismissedQuery] = useState<string | null>(null)
+  /** Index into `suggestions`; -1 means nothing is highlighted. */
   const [highlightIndex, setHighlightIndex] = useState(-1)
   /** Topic chosen in the "which topic is it?" step. */
   const [enrichTopicId, setEnrichTopicId] = useState<string | null>(null)
@@ -107,6 +148,40 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
     }
   }, [submittedQuery, isQueryLongEnough, activeTopicId])
 
+  // Typeahead suggestions, debounced so a fast typist fires one request rather
+  // than one per keystroke. Skipped once the typed text is what was searched
+  // for, so submitting a query leaves the suggestion list closed.
+  useEffect(() => {
+    const trimmed = query.trim()
+
+    if (trimmed.length < MIN_QUERY_LENGTH || trimmed === submittedQuery) {
+      setSuggestions([])
+      setHighlightIndex(-1)
+      return
+    }
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      searchService
+        .searchItems({
+          query: trimmed,
+          topicId: activeTopicId ?? undefined,
+          limit: SUGGESTION_FETCH_LIMIT,
+          nameOnly: true
+        })
+        .then(({ data }) => {
+          if (cancelled) return
+          setSuggestions(rankByTitleMatch(data, trimmed).slice(0, SUGGESTION_LIMIT))
+          setHighlightIndex(-1)
+        })
+    }, SUGGESTION_DEBOUNCE_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [query, submittedQuery, activeTopicId])
+
   // Reset the enrichment topic choice whenever the question changes.
   useEffect(() => {
     setEnrichTopicId(null)
@@ -132,48 +207,58 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
     return [...byTopic.values()]
   }, [results])
 
-  /** Flattened display order, so arrow keys match what the user sees. */
+  /** Flattened display order of the full results. */
   const flatResults = useMemo(
     () => groups.flatMap((group) => group.items),
     [groups]
   )
 
+  const showSuggestions = suggestions.length > 0 && dismissedQuery !== query
+
   const handleSelect = useCallback(
     (item: SearchResultItem) => {
+      // Picking something closes the suggestion list — it has done its job, and
+      // leaving it open would hover over whatever the parent opens.
+      setDismissedQuery(query)
+      setHighlightIndex(-1)
       onSelectItem(item)
     },
-    [onSelectItem]
+    [onSelectItem, query]
   )
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Enter') {
         event.preventDefault()
-        // Enter picks the highlighted card if there is one, otherwise it is
-        // what actually launches the search.
-        if (highlightIndex >= 0 && flatResults[highlightIndex]) {
-          handleSelect(flatResults[highlightIndex])
+        // Enter opens the highlighted suggestion if the user arrowed onto one,
+        // otherwise it is what actually launches the full search.
+        if (showSuggestions && highlightIndex >= 0 && suggestions[highlightIndex]) {
+          handleSelect(suggestions[highlightIndex])
         } else {
           setSubmittedQuery(query.trim())
         }
         return
       }
 
-      if (flatResults.length === 0) return
+      if (event.key === 'Escape') {
+        setDismissedQuery(query)
+        setHighlightIndex(-1)
+        return
+      }
+
+      if (!showSuggestions) return
 
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setHighlightIndex((prev) => (prev + 1) % flatResults.length)
+        setHighlightIndex((prev) => (prev + 1) % suggestions.length)
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         setHighlightIndex((prev) =>
-          prev <= 0 ? flatResults.length - 1 : prev - 1
+          prev <= 0 ? suggestions.length - 1 : prev - 1
         )
-      } else if (event.key === 'Escape') {
-        setHighlightIndex(-1)
       }
     },
-    [flatResults, highlightIndex, handleSelect, query]
+    [suggestions, showSuggestions, highlightIndex, handleSelect, query]
   )
 
   const handleEnrichmentComplete = useCallback(
@@ -198,8 +283,8 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   )
   const hasResults = flatResults.length > 0
   const highlightedOptionId =
-    highlightIndex >= 0 && flatResults[highlightIndex]
-      ? getOptionId(flatResults[highlightIndex].id)
+    showSuggestions && highlightIndex >= 0 && suggestions[highlightIndex]
+      ? getOptionId(suggestions[highlightIndex].id)
       : undefined
 
   // Anything below the input counts as "active": the parent uses this to give
@@ -211,33 +296,70 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
 
   return (
     <div onKeyDown={handleKeyDown} className="w-full">
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder="what are you into? (press Enter)"
-        ariaLabel="Search everything"
-        isSearching={isSearching}
-        size="hero"
-        topics={topics}
-        activeTopicId={activeTopicId}
-        onTopicChange={setActiveTopicId}
-        role="combobox"
-        ariaExpanded={hasResults}
-        ariaControls={listboxId}
-        ariaActiveDescendant={highlightedOptionId}
-      />
+      <div className="relative">
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="What are you looking for?"
+          ariaLabel="Search everything"
+          isSearching={isSearching}
+          size="hero"
+          topics={topics}
+          activeTopicId={activeTopicId}
+          onTopicChange={setActiveTopicId}
+          role="combobox"
+          ariaExpanded={showSuggestions}
+          ariaControls={listboxId}
+          ariaActiveDescendant={highlightedOptionId}
+        />
+
+        {/*
+          Typeahead suggestions. Absolutely positioned so opening them never
+          moves the input — only submitting a query changes the layout.
+        */}
+        {showSuggestions && (
+          <ul
+            id={listboxId}
+            role="listbox"
+            aria-label="Suggestions"
+            className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-lg border bg-popover text-left shadow-lg"
+          >
+            {suggestions.map((item, index) => (
+              <li key={item.id}>
+                <button
+                  id={getOptionId(item.id)}
+                  type="button"
+                  role="option"
+                  aria-selected={index === highlightIndex}
+                  onClick={() => handleSelect(item)}
+                  onMouseEnter={() => setHighlightIndex(index)}
+                  className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors focus:outline-none focus:bg-muted ${
+                    index === highlightIndex ? 'bg-muted' : ''
+                  }`}
+                >
+                  <span aria-hidden="true" className="opacity-60">
+                    {item.topic.icon ?? '•'}
+                  </span>
+                  <span className="truncate">{item.name}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                    {item.topic.name}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {hasResults && (
-        <ul
-          id={listboxId}
-          role="listbox"
+        <div
           aria-label="Search results"
           className="mt-8 flex flex-col gap-8 text-left"
         >
           {groups.map((group) => {
             const headingId = `${listboxId}-heading-${group.topic.id}`
             return (
-              <li key={group.topic.id} role="group" aria-labelledby={headingId}>
+              <section key={group.topic.id} aria-labelledby={headingId}>
                 <p
                   id={headingId}
                   className="mb-3 flex items-center gap-2 border-b pb-2 text-sm font-medium text-muted-foreground"
@@ -247,7 +369,12 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
                   <span className="text-xs">({group.items.length})</span>
                 </p>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {/*
+                  Narrow columns on purpose: posters and book covers are 2:3,
+                  so a card sized to that ratio shows the whole artwork instead
+                  of cropping the top and bottom off it.
+                */}
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                   {group.items.map((item) => {
                     const index = flatResults.indexOf(item)
                     const imageUrl = getImageUrl(item)
@@ -255,20 +382,14 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
                     return (
                       <motion.button
                         key={item.id}
-                        id={getOptionId(item.id)}
                         type="button"
-                        role="option"
-                        aria-selected={index === highlightIndex}
                         onClick={() => handleSelect(item)}
-                        onMouseEnter={() => setHighlightIndex(index)}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
-                        className={`group flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                          index === highlightIndex ? 'border-foreground/40 bg-muted' : ''
-                        }`}
+                        className="group flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-foreground/40 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
                       >
-                        <div className="flex h-32 w-full items-center justify-center overflow-hidden bg-muted">
+                        <div className="flex aspect-[2/3] w-full items-center justify-center overflow-hidden bg-muted">
                           {imageUrl ? (
                             <LazyImage
                               src={imageUrl}
@@ -283,17 +404,17 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
                             </span>
                           )}
                         </div>
-                        <span className="line-clamp-2 px-3 py-2 text-sm font-medium">
+                        <span className="line-clamp-2 px-2 py-2 text-xs font-medium">
                           {item.name}
                         </span>
                       </motion.button>
                     )
                   })}
                 </div>
-              </li>
+              </section>
             )
           })}
-        </ul>
+        </div>
       )}
 
       {noMatches && !user && (

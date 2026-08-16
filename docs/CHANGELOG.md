@@ -16,6 +16,26 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-16] Search Suggestions Restored, Poster-Shaped Cards, Topic-Band Z-Index Fix
+
+**What**:
+- **Fixed**: the topic bands flashed on load and then vanished. `TopicBands` used `-z-10`, which only stays visible while an ancestor establishes a stacking context — `PageTransition` does exactly that *during* its transform animation and stops the moment it ends, dropping the bands behind the layout's opaque background. Now `z-0`, with the home page content lifted onto `relative z-10`.
+- **Typeahead suggestions are back**: up to 5 title-only matches in a dropdown while typing (200 ms debounce), via a new `nameOnly` option on `searchService.searchItems`. Arrow keys walk them, Enter opens the highlighted one, Escape dismisses. Enter with nothing highlighted still runs the full search.
+- Suggestions over-fetch 20 rows and re-rank client-side (exact title → prefix → word-boundary → rest) before slicing to 5, because the server can only sort alphabetically.
+- Result cards are now **2:3**, matching posters and book covers, in a 3/4/6-column grid. They were 32px-tall landscape boxes cropping the top and bottom off every image.
+- Input copy: "what are you into? (press Enter)" → "What are you looking for?".
+
+**Why**: The Enter-only search from 2026-08-15 removed the as-you-type affordance entirely; suggestions restore it for the common "I know exactly which item I want" case without bringing back the layout-shifting debounced search. Suggestions match on title only because a description hit surfaces a row whose title looks unrelated to what was typed.
+
+**Decisions worth recording**:
+- The combobox ARIA now wires to the **suggestion dropdown**, not the results grid. Two listboxes on one input is invalid, and the suggestion list is the one that behaves like a popup. Result cards became plain buttons inside `<section aria-labelledby>` — they are in-flow, tabbable content, not options.
+- Both search modes share one escaped `ilike` pattern through `.or()`; the name-only case just drops the description clause, so there is no second escaping regime to keep correct.
+- `TopicBands` carries a comment about the negative-z-index trap, since `-z-10` looks correct in isolation and only fails in combination with the page transition.
+
+**Breaking**: None.
+
+**Files Changed**: `frontend/src/components/ItemSearch.tsx`, `ItemSearch.test.tsx`, `TopicBands.tsx`, `frontend/src/pages/HomePage.tsx`, `frontend/src/services/searchService.ts`.
+
 ### [2026-08-15] Home Page Polish: Collapsing Hero, Result Cards, Topic-Band Background
 
 **What**:

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '../test/utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '../test/utils'
 import { ItemSearch } from './ItemSearch'
 import { searchService } from '../services/searchService'
 import { useAuthStore } from '../store/authStore'
@@ -46,23 +46,103 @@ function search(value: string) {
   fireEvent.keyDown(screen.getByLabelText('Search everything'), { key: 'Enter' })
 }
 
+/** The per-topic result sections shown after a submitted search. */
+function resultCards() {
+  return screen.getAllByRole('button').filter((button) => button.closest('.grid'))
+}
+
 describe('ItemSearch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     setAuth({ id: 'u1' })
     vi.mocked(searchService.listTopics).mockResolvedValue({ data: topics as never, error: null })
     vi.mocked(searchService.searchItems).mockResolvedValue({ data: results as never, error: null })
   })
 
-  it('does not search while the user is only typing', async () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not run the full search while the user is only typing', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
     type('dune')
 
     await waitFor(() => {
       expect(searchService.listTopics).toHaveBeenCalled()
     })
-    expect(searchService.searchItems).not.toHaveBeenCalled()
+    // Only the title-only suggestion query may fire before Enter.
+    expect(
+      vi.mocked(searchService.searchItems).mock.calls.filter(
+        ([params]) => !params.nameOnly
+      )
+    ).toHaveLength(0)
+  })
+
+  it('shows at most five title-only suggestions while typing', async () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({
+      id: `s${index}`,
+      name: `Dune ${index}`,
+      topic: topics[0]
+    }))
+    vi.mocked(searchService.searchItems).mockResolvedValue({ data: many as never, error: null })
+
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    type('dune')
+
+    await waitFor(() => {
+      expect(screen.getByRole('listbox', { name: 'Suggestions' })).toBeInTheDocument()
+    })
+    expect(searchService.searchItems).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'dune', nameOnly: true })
+    )
+    expect(screen.getAllByRole('option')).toHaveLength(5)
+  })
+
+  it('ranks an exact and a prefix title match above a mid-string one', async () => {
+    vi.mocked(searchService.searchItems).mockResolvedValue({
+      data: [
+        { id: 'a', name: 'Children of Dune', topic: topics[0] },
+        { id: 'b', name: 'Dune: Part Two', topic: topics[0] },
+        { id: 'c', name: 'Dune', topic: topics[0] }
+      ] as never,
+      error: null
+    })
+
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    type('dune')
+
+    await waitFor(() => screen.getByRole('listbox', { name: 'Suggestions' }))
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      expect.stringContaining('Dune'),
+      expect.stringContaining('Dune: Part Two'),
+      expect.stringContaining('Children of Dune')
+    ])
+  })
+
+  it('opens the highlighted suggestion on Enter instead of searching', async () => {
+    const onSelectItem = vi.fn()
+    render(<ItemSearch onSelectItem={onSelectItem} />)
+    type('dune')
+
+    await waitFor(() => screen.getByRole('listbox', { name: 'Suggestions' }))
+    const input = screen.getByLabelText('Search everything')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onSelectItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'i1' }))
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('dismisses suggestions on Escape without clearing the query', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    type('dune')
+
+    await waitFor(() => screen.getByRole('listbox', { name: 'Suggestions' }))
+    fireEvent.keyDown(screen.getByLabelText('Search everything'), { key: 'Escape' })
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Search everything')).toHaveValue('dune')
   })
 
   it('does not search for queries shorter than the minimum', async () => {
@@ -80,15 +160,15 @@ describe('ItemSearch', () => {
     search('dune')
 
     await waitFor(() => {
-      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expect(screen.getAllByRole('region')).toHaveLength(2)
     })
     expect(searchService.searchItems).toHaveBeenCalledWith(
-      expect.objectContaining({ query: 'dune', topicId: undefined })
+      expect.objectContaining({ query: 'dune', topicId: undefined, limit: 24 })
     )
-    const listbox = within(screen.getByRole('listbox'))
-    expect(listbox.getByText('Books')).toBeInTheDocument()
-    expect(listbox.getByText('Movies')).toBeInTheDocument()
-    expect(screen.getAllByRole('option')).toHaveLength(2)
+    // One section per topic, each holding its own cards. (The section headings
+    // themselves are asserted by the accessible-name test below; "Books" and
+    // "Movies" also appear as scope chips, so plain text queries are ambiguous.)
+    expect(resultCards()).toHaveLength(2)
   })
 
   it('reports its active state so the hero can collapse', async () => {
@@ -122,7 +202,7 @@ describe('ItemSearch', () => {
     await waitFor(() => screen.getByRole('button', { name: 'Search Movies only' }))
 
     search('dune')
-    await waitFor(() => screen.getByRole('listbox'))
+    await waitFor(() => screen.getAllByRole('region'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Search Books only' }))
 
@@ -138,38 +218,10 @@ describe('ItemSearch', () => {
     render(<ItemSearch onSelectItem={onSelectItem} />)
     search('dune')
 
-    await waitFor(() => screen.getByRole('listbox'))
-    fireEvent.click(screen.getByRole('option', { name: /Dune \(2021\)/ }))
+    await waitFor(() => screen.getAllByRole('region'))
+    fireEvent.click(screen.getByRole('button', { name: /Dune \(2021\)/ }))
 
     expect(onSelectItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'i2' }))
-  })
-
-  it('moves the highlight with arrow keys and selects with Enter', async () => {
-    const onSelectItem = vi.fn()
-    render(<ItemSearch onSelectItem={onSelectItem} />)
-    search('dune')
-    await waitFor(() => screen.getByRole('listbox'))
-
-    const input = screen.getByLabelText('Search everything')
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    fireEvent.keyDown(input, { key: 'Enter' })
-
-    expect(onSelectItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'i2' }))
-  })
-
-  it('clears the highlight on Escape but keeps the query and results', async () => {
-    render(<ItemSearch onSelectItem={vi.fn()} />)
-    search('dune')
-    await waitFor(() => screen.getByRole('listbox'))
-
-    const input = screen.getByLabelText('Search everything')
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    fireEvent.keyDown(input, { key: 'Escape' })
-
-    expect(input).not.toHaveAttribute('aria-activedescendant')
-    expect(screen.getByRole('listbox')).toBeInTheDocument()
-    expect(input).toHaveValue('dune')
   })
 
   it('prompts a logged-out user to log in when nothing matches', async () => {
@@ -199,23 +251,23 @@ describe('ItemSearch', () => {
     expect(screen.getByTestId('enrichment-prompt')).toHaveTextContent('Books')
   })
 
-  it('exposes combobox attributes that track open state', async () => {
+  it('exposes combobox attributes that track the suggestion list', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
     const input = screen.getByLabelText('Search everything')
     expect(input).toHaveAttribute('role', 'combobox')
     expect(input).toHaveAttribute('aria-expanded', 'false')
 
-    search('dune')
-    await waitFor(() => screen.getByRole('listbox'))
+    type('dune')
+    await waitFor(() => screen.getByRole('listbox', { name: 'Suggestions' }))
 
     expect(input).toHaveAttribute('aria-expanded', 'true')
     expect(input).toHaveAttribute('aria-controls', screen.getByRole('listbox').id)
   })
 
-  it('sets aria-activedescendant to the highlighted option and updates with arrow keys', async () => {
+  it('sets aria-activedescendant to the highlighted suggestion and updates with arrow keys', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
-    search('dune')
-    await waitFor(() => screen.getByRole('listbox'))
+    type('dune')
+    await waitFor(() => screen.getByRole('listbox', { name: 'Suggestions' }))
 
     const input = screen.getByLabelText('Search everything')
     expect(input).not.toHaveAttribute('aria-activedescendant')
@@ -231,12 +283,13 @@ describe('ItemSearch', () => {
   it('gives each topic section an accessible name', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
     search('dune')
-    await waitFor(() => screen.getByRole('listbox'))
 
-    const groups = within(screen.getByRole('listbox')).getAllByRole('group')
-    const names = groups.map((group) =>
-      document.getElementById(group.getAttribute('aria-labelledby') ?? '')?.textContent
-    )
+    await waitFor(() => expect(screen.getAllByRole('region')).toHaveLength(2))
+    const names = screen
+      .getAllByRole('region')
+      .map((region) =>
+        document.getElementById(region.getAttribute('aria-labelledby') ?? '')?.textContent
+      )
     expect(names.map((name) => name?.replace(/[^A-Za-z]/g, '')).sort()).toEqual([
       'Books',
       'Movies'
@@ -252,9 +305,9 @@ describe('ItemSearch', () => {
     search('dune')
 
     await waitFor(() => {
-      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expect(screen.getAllByRole('region')).toHaveLength(2)
     })
-    expect(screen.getAllByRole('option')).toHaveLength(2)
+    expect(resultCards()).toHaveLength(2)
     expect(screen.queryByText('Broken')).not.toBeInTheDocument()
   })
 

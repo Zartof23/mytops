@@ -4,6 +4,13 @@
  * Purely decorative background for the home page: fixed behind the content,
  * non-interactive, and kept at a low opacity so it reads as texture rather than
  * as an element competing with the search box.
+ *
+ * Deliberately `z-0` and not a negative z-index. A negative one only stays
+ * visible while an ancestor happens to establish a stacking context — which the
+ * page transition does *during* its transform animation and stops doing the
+ * moment the animation ends, making the bands flash and vanish. At `z-0` the
+ * bands paint above the layout's background unconditionally; the page content
+ * sits above them on its own `relative z-10` wrapper.
  */
 
 /** One hue per topic, in the order the topics are listed across the product. */
@@ -21,7 +28,7 @@ export function TopicBands() {
     <div
       aria-hidden="true"
       data-testid="topic-bands"
-      className="pointer-events-none fixed inset-0 -z-10 flex select-none"
+      className="pointer-events-none fixed inset-0 z-0 flex select-none"
     >
       {BAND_COLORS.map((color, index) => (
         <div
