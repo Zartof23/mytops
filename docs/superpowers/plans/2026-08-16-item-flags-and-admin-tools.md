@@ -2098,6 +2098,90 @@ git commit -m "feat: add admin-rescan-item edge function with preview and select
 
 ---
 
+
+#### AMENDMENT (2026-08-16, after Task 8 review) — stored proposals
+
+Review found that re-running extraction on apply creates a value-level TOCTOU: extraction is
+non-deterministic, so the admin approves `metadata.director = "Lana Wachowski"`, the second run
+computes a different director, the **field name** still matches the filter, and a value the admin
+never saw is written to production. It also doubled the Tavily+Claude cost and made the admin wait
+through a second extraction.
+
+**Decision (owner, 2026-08-16): persist the proposal and apply from it.** Preview stores its
+proposal and returns an id; apply loads that row and writes from it, with no second extraction. The
+trust boundary is preserved — the stored proposal is server-generated and server-held, and the
+client only ever sends an id plus field names.
+
+**New table** (its own migration, name `create_admin_rescan_proposals`):
+
+```sql
+create table if not exists public.admin_rescan_proposals (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references public.items(id) on delete cascade,
+  actor_id uuid not null references auth.users(id),
+  proposed jsonb not null,
+  changed_fields text[] not null,
+  confidence numeric,
+  sources jsonb,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '30 minutes'
+);
+
+create index if not exists admin_rescan_proposals_item on public.admin_rescan_proposals(item_id);
+create index if not exists admin_rescan_proposals_expiry on public.admin_rescan_proposals(expires_at);
+
+alter table public.admin_rescan_proposals enable row level security;
+
+create policy "Admins can read rescan proposals"
+on public.admin_rescan_proposals for select
+to authenticated
+using (public.is_admin());
+
+-- No INSERT/UPDATE/DELETE policies: written only by the service-role Edge Function,
+-- same posture as admin_audit_log.
+```
+
+`on delete cascade` from `items` means a deleted item takes its stale proposals with it.
+
+**Preview endpoint** — after computing `changed`, insert the proposal with the service-role client
+and return its id. Also opportunistically clear expired rows for that item
+(`delete from admin_rescan_proposals where item_id = $1 and expires_at < now()`), so the table
+self-maintains without a cron job. Response gains `proposal_id`:
+
+```json
+{ "proposal_id": "...", "current": {...}, "proposed": {...},
+  "changed_fields": [...], "confidence": 0.9, "sources": [...] }
+```
+
+**Apply endpoint** — body is now `{ proposal_id, fields }`. It must:
+
+1. Check `is_admin()` first, as before.
+2. Load the proposal by id with the service-role client. Reject with `404` if missing, and `410`
+   with a clear message if `expires_at < now()` ("That proposal expired — re-scan and review again").
+3. **Re-run no extraction.** All written values come from the stored `proposed` payload.
+4. Intersect the requested `fields` against the **stored** `changed_fields` — same filter as before,
+   now against server-stored data.
+5. Take `item_id` from the stored proposal, never from the request body, so a client cannot point a
+   proposal at a different item.
+6. Delete the proposal row after a successful apply, so it cannot be replayed.
+
+**`applied_fields` must reflect what actually landed.** Build the list as fields are written, not
+from the requested selection — if `downloadAndStoreImage` returns null the image was not stored, and
+recording `image_url` as applied writes a false audit entry.
+
+**The audit insert must be checked.** Destructure its `error`, `console.error` it, and include an
+`audit_failed: true` marker in the response so the UI can surface it. The item is already mutated at
+that point; a silently lost audit row is the one failure here with no other trace.
+
+Interfaces this changes for later tasks:
+- `adminService.previewRescan` returns a `RescanPreview` that now includes `proposal_id: string`.
+- `adminService.applyRescan(proposalId: string, fields: string[])` — takes the proposal id, **not**
+  the item id.
+- `RescanPreview` gains `proposal_id: string`.
+- `RescanDiff` holds the `proposal_id` from the preview and passes it to apply.
+
+---
+
 ### Task 9: adminService
 
 **Files:**
@@ -2111,8 +2195,15 @@ git commit -m "feat: add admin-rescan-item edge function with preview and select
   - `adminService.getItemLinks(itemId: string): Promise<{ data: ItemLinks | null; error: Error | null }>`
   - `adminService.deleteItem(itemId: string, force: boolean): Promise<{ error: Error | null }>`
   - `adminService.previewRescan(itemId: string): Promise<{ data: RescanPreview | null; error: Error | null }>`
-  - `adminService.applyRescan(itemId: string, fields: string[]): Promise<{ data: Item | null; error: Error | null }>`
+  - `adminService.applyRescan(proposalId: string, fields: string[]): Promise<{ data: Item | null; error: Error | null }>` — **takes the proposal id, not the item id** (see the Task 8 AMENDMENT).
   - Types `ItemLinks`, `RescanPreview`.
+
+**Amended by the Task 8 stored-proposal decision.** `RescanPreview` gains `proposal_id: string`, and
+`applyRescan` sends `{ proposal_id, fields }` rather than `{ item_id, fields }`. Update the test
+expectations in this task's Step 2 accordingly: the apply test must assert
+`supabase.functions.invoke('admin-rescan-item/apply', { body: { proposal_id: 'p1', fields: ['metadata.director'] } })`,
+and the preview test's mocked response must include a `proposal_id`. Everything else in this task is
+unchanged.
 
 - [ ] **Step 1: Add the types**
 
@@ -2625,6 +2716,15 @@ git commit -m "feat: add admin delete dialog with link warning and typed confirm
 **Interfaces:**
 - Consumes: `adminService.previewRescan`, `adminService.applyRescan`, `RescanPreview`.
 - Produces: `<RescanDiff itemId open onOpenChange onApplied />`.
+
+**Amended by the Task 8 stored-proposal decision.** The preview response now carries a
+`proposal_id`; hold it in component state alongside the preview and pass it to
+`adminService.applyRescan(proposalId, selectedFields)` — apply no longer takes the item id. Two
+consequences for the tests in this task: the mocked preview must include a `proposal_id` (use
+`'p1'`), and the "excludes unchecked fields" test must assert
+`applyRescan` was called with `('p1', ['metadata.director'])`. Also handle the expired-proposal
+case: a `410` surfaces as an error whose message should be shown in the existing `role="alert"`
+region, telling the admin to re-scan. Everything else in this task is unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
