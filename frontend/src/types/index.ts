@@ -70,3 +70,20 @@ export interface UserTodoItem {
   item?: Item & { topic?: Topic }
   topic?: Topic
 }
+
+export type FlagStatus = 'open' | 'resolved' | 'rejected'
+
+export interface ItemFlag {
+  id: string
+  item_id: string
+  user_id: string
+  reason: string
+  status: FlagStatus
+  resolution_note: string | null
+  resolved_by: string | null
+  resolved_at: string | null
+  created_at: string
+  // Joined data
+  item?: Item & { topic?: Topic }
+  reporter?: Pick<Profile, 'id' | 'username' | 'display_name'>
+}
