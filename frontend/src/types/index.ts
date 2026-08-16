@@ -87,3 +87,24 @@ export interface ItemFlag {
   item?: Item & { topic?: Topic }
   reporter?: Pick<Profile, 'id' | 'username' | 'display_name'>
 }
+
+export interface ItemLinks {
+  rating_count: number
+  todo_count: number
+  flag_count: number
+  raters: string[]
+}
+
+export interface RescanPreview {
+  proposal_id: string
+  current: Item
+  proposed: {
+    name: string
+    description: string
+    metadata: Record<string, unknown>
+    image_url: string | null
+  }
+  changed_fields: string[]
+  confidence: number
+  sources: string[]
+}
