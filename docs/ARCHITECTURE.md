@@ -563,11 +563,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 ### Home Page / Discovery Flow
 
 The home page is search-first: `HomePage` renders `ItemSearch`, which wraps the
-shared `SearchInput` with debounce, a results dropdown, keyboard navigation,
-and an AI-enrichment fallback when nothing matches. Selecting a result calls
-`onSelectItem`, which `HomePage` uses to open `ItemDetailModal` — `ItemSearch`
-itself has no knowledge of the modal. `TopicDetailPage` reuses `SearchInput`
-directly (no dropdown) to filter its topic-scoped grid.
+shared `SearchInput` and produces two distinct outputs:
+
+- **Typeahead suggestions** — debounced, title-only (`nameOnly`), capped at five
+  and ranked prefix-first. A shortcut to one specific item, shown in an
+  absolutely positioned listbox so it never moves the input. Keyboard navigable.
+- **Full results** — run **only on Enter**, grouped into per-topic sections.
+  Enter-to-search is the load-bearing decision here: it is what lets the layout
+  shift (the hero collapses via `onActiveChange`) on an explicit action rather
+  than on every keystroke.
+
+When the full search returns nothing, an AI-enrichment fallback takes over.
+Selecting anything calls `onSelectItem`, which `HomePage` uses to open
+`ItemDetailModal` — `ItemSearch` itself has no knowledge of the modal.
+`TopicDetailPage` reuses `SearchInput` directly (no dropdown) to filter its
+topic-scoped grid.
 
 There are two distinct search paths, chosen for different jobs:
 

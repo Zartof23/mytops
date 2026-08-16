@@ -39,7 +39,8 @@ export interface SearchInputProps {
   ariaActiveDescendant?: string
 }
 
-const CHIP_BASE =
+/** Shared pill styling for topic chips, also used by `ItemSearch`. */
+export const CHIP_BASE =
   'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary'
 
 /**
@@ -77,6 +78,17 @@ export function SearchInput({
 
   const showChips = Boolean(topics && topics.length > 0 && onTopicChange)
 
+  // "All" is just the chip whose scope is `null`, so both render from one list.
+  const chips = [
+    { id: null, label: 'All', icon: null, ariaLabel: 'Search all topics' },
+    ...(topics ?? []).map((topic) => ({
+      id: topic.id as string | null,
+      label: topic.name,
+      icon: topic.icon,
+      ariaLabel: `Search ${topic.name} only`
+    }))
+  ]
+
   return (
     <div className={className}>
       <div className="relative">
@@ -109,18 +121,21 @@ export function SearchInput({
           }`}
         />
         {showEnterHint && (
-          <span id={`${inputId}-enter-hint`} className="sr-only">
-            Press Enter to search
-          </span>
-        )}
-        {showEnterHint && !isSearching && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 select-none items-center gap-1 rounded border bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground"
-          >
-            <CornerDownLeft className="h-3 w-3" />
-            Enter
-          </span>
+          <>
+            <span id={`${inputId}-enter-hint`} className="sr-only">
+              Press Enter to search
+            </span>
+            {/* The badge shares its slot with the spinner, so it yields to it. */}
+            {!isSearching && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 select-none items-center gap-1 rounded border bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground"
+              >
+                <CornerDownLeft className="h-3 w-3" />
+                Enter
+              </span>
+            )}
+          </>
         )}
         {isSearching && (
           <span
@@ -140,34 +155,21 @@ export function SearchInput({
           aria-label="Search scope"
           className="mt-3 flex flex-wrap justify-center gap-2"
         >
-          <button
-            type="button"
-            onClick={() => onTopicChange?.(null)}
-            aria-pressed={activeTopicId === null}
-            aria-label="Search all topics"
-            className={`${CHIP_BASE} ${
-              activeTopicId === null
-                ? 'bg-foreground text-background border-foreground'
-                : 'hover:bg-muted'
-            }`}
-          >
-            All
-          </button>
-          {topics?.map((topic) => (
+          {chips.map((chip) => (
             <button
-              key={topic.id}
+              key={chip.id ?? 'all'}
               type="button"
-              onClick={() => onTopicChange?.(topic.id)}
-              aria-pressed={activeTopicId === topic.id}
-              aria-label={`Search ${topic.name} only`}
+              onClick={() => onTopicChange?.(chip.id)}
+              aria-pressed={activeTopicId === chip.id}
+              aria-label={chip.ariaLabel}
               className={`${CHIP_BASE} ${
-                activeTopicId === topic.id
+                activeTopicId === chip.id
                   ? 'bg-foreground text-background border-foreground'
                   : 'hover:bg-muted'
               }`}
             >
-              {topic.icon && <span aria-hidden="true">{topic.icon}</span>}
-              {topic.name}
+              {chip.icon && <span aria-hidden="true">{chip.icon}</span>}
+              {chip.label}
             </button>
           ))}
         </div>

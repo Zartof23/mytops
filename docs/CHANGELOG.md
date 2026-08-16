@@ -16,6 +16,24 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-16] Search-First Cleanup Pass
+
+**What**: Quality pass over the search-first branch — no behaviour changes.
+- Extracted `lib/itemImage.ts` (`getItemImageUrl`); `ItemCard`, `ItemDetailModal` and `ItemSearch` had three copies of the `image_url → metadata.poster_url → metadata.image` chain.
+- Extracted `lib/links.ts` (`GITHUB_REPO`, `GITHUB_REPO_URL`, `BUY_ME_A_COFFEE_URL`) out of the two components that hardcoded them.
+- `GitHubStarBadge` now shares one module-level fetch promise across instances — the badge renders twice on the home page (navbar + FAQ), which doubled the calls against GitHub's 60/hr anonymous limit.
+- `ItemSearch` uses the existing `useDebouncedValue` hook instead of a hand-rolled `setTimeout`; hoisted the word-boundary regex out of the sort comparator and scores each suggestion once; dropped the `flatResults` memo and its per-card `indexOf` scan in favour of a running counter; derived `highlightedSuggestion` once instead of repeating the condition.
+- `SearchInput` renders "All" and the topic chips from one list; exported `CHIP_BASE` so the enrichment chip row reuses it.
+- `searchService`: `escapeForIlike` became a single `replace` over a lookup table, merged the two identical empty-result guards, and removed the unused `metadataFilters` param (dead API surface — adding an optional param later is non-breaking anyway).
+
+**Why**: Duplication introduced across a fast-moving feature branch drifts once it is touched separately. Fixing the image chain or the chip styling in one place should not require finding two more.
+
+**Breaking**: None. 186 tests pass; the `metadataFilters` test was rewritten to cover the "no topic filter" case it was actually asserting.
+
+**Files Changed**: `frontend/src/lib/itemImage.ts` (new), `lib/links.ts` (new), `components/ItemSearch.tsx`, `SearchInput.tsx`, `ItemCard.tsx`, `ItemDetailModal.tsx`, `GitHubStarBadge.tsx`, `BuyMeACoffeeButton.tsx`, `FaqSection.tsx`, `services/searchService.ts`, `searchService.test.ts`, `docs/ARCHITECTURE.md`, `docs/context/FRONTEND_CONTEXT.md`.
+
+---
+
 ### [2026-08-16] Enter-Key Hint, Single-Pass Band Blur
 
 **What**:

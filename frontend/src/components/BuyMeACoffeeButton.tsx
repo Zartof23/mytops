@@ -1,4 +1,4 @@
-const BMC_URL = 'https://buymeacoffee.com/robertocalo'
+import { BUY_ME_A_COFFEE_URL } from '@/lib/links'
 
 interface BuyMeACoffeeButtonProps {
   /** `sm` collapses to the emoji only on narrow screens (navbar use). */
@@ -17,7 +17,7 @@ export function BuyMeACoffeeButton({ size = 'default' }: BuyMeACoffeeButtonProps
 
   return (
     <a
-      href={BMC_URL}
+      href={BUY_ME_A_COFFEE_URL}
       target="_blank"
       rel="noopener noreferrer"
       style={{

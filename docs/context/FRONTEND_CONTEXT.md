@@ -20,7 +20,7 @@ frontend/src/
 │   ├── SEO.tsx          # Meta tags and structured data
 │   ├── PageTransition.tsx  # Animation wrappers
 │   ├── SearchInput.tsx  # Presentational, controlled search box; shared by HomePage (via ItemSearch) and TopicDetailPage
-│   ├── ItemSearch.tsx   # Home-only: debounce, dropdown, keyboard nav, enrichment fallback
+│   ├── ItemSearch.tsx   # Home-only: debounced typeahead suggestions + Enter-submitted per-topic results, keyboard nav, enrichment fallback
 │   ├── FaqSection.tsx   # Scroll-revealed FAQ bands; exports FAQ_ANCHOR_ID
 │   ├── BuyMeACoffeeButton.tsx
 │   └── GitHubStarBadge.tsx  # Takes a `size` prop
@@ -39,7 +39,7 @@ frontend/src/
 │   ├── profileService.ts
 │   ├── todoService.ts
 │   ├── enrichmentService.ts
-│   └── searchService.ts  # searchItems({ query, topicId?, limit?, metadataFilters? }), listTopics(). metadataFilters is accepted and ignored — reserved for metadata search.
+│   └── searchService.ts  # searchItems({ query, topicId?, limit?, nameOnly? }), listTopics(). nameOnly skips the description clause — used by the typeahead suggestions.
 ├── hooks/
 │   └── useEnrichment.ts
 ├── lib/

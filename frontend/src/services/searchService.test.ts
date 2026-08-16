@@ -180,13 +180,10 @@ describe('searchService', () => {
       expect(chain2.limit).toHaveBeenCalledWith(20)
     })
 
-    it('accepts and ignores metadataFilters', async () => {
+    it('does not filter by topic when no topicId is given', async () => {
       const chain = mockQuery({ data: [], error: null })
 
-      const result = await searchService.searchItems({
-        query: 'Dune',
-        metadataFilters: { year: 1965 }
-      })
+      const result = await searchService.searchItems({ query: 'Dune' })
 
       expect(result.error).toBeNull()
       expect(chain.eq).not.toHaveBeenCalled()

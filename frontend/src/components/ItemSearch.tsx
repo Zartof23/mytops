@@ -7,9 +7,11 @@ import {
   MIN_QUERY_LENGTH,
   type SearchResultItem
 } from '../services/searchService'
-import { SearchInput } from './SearchInput'
+import { SearchInput, CHIP_BASE } from './SearchInput'
 import { EnrichmentPrompt } from './EnrichmentPrompt'
 import { LazyImage } from './LazyImage'
+import { useDebouncedValue } from '@/lib/hooks'
+import { getItemImageUrl } from '@/lib/itemImage'
 import { Card } from '@/components/ui/card'
 import type { Item, Topic } from '@/types'
 
@@ -33,14 +35,6 @@ interface ItemSearchProps {
   onActiveChange?: (isActive: boolean) => void
 }
 
-/** First usable image on an item, mirroring the modal's fallback chain. */
-function getImageUrl(item: Item): string | null {
-  if (item.image_url) return item.image_url
-  if (typeof item.metadata?.poster_url === 'string') return item.metadata.poster_url
-  if (typeof item.metadata?.image === 'string') return item.metadata.image
-  return null
-}
-
 /**
  * Order suggestions by how well the title matches, best first.
  *
@@ -54,16 +48,21 @@ function rankByTitleMatch(
   query: string
 ): SearchResultItem[] {
   const needle = query.toLowerCase()
+  const atWordBoundary = new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
 
   const score = (name: string): number => {
     const title = name.toLowerCase()
     if (title === needle) return 0
     if (title.startsWith(needle)) return 1
-    if (new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(title)) return 2
+    if (atWordBoundary.test(title)) return 2
     return 3
   }
 
-  return [...items].sort((a, b) => score(a.name) - score(b.name))
+  // Score once per item rather than twice per comparison.
+  return items
+    .map((item) => ({ item, score: score(item.name) }))
+    .sort((a, b) => a.score - b.score)
+    .map(({ item }) => item)
 }
 
 /**
@@ -96,6 +95,7 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   /** Topic chosen in the "which topic is it?" step. */
   const [enrichTopicId, setEnrichTopicId] = useState<string | null>(null)
 
+  const debouncedQuery = useDebouncedValue(query, SUGGESTION_DEBOUNCE_MS)
   const listboxId = useId()
   const getOptionId = useCallback(
     (itemId: string) => `${listboxId}-option-${itemId}`,
@@ -160,27 +160,29 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
       return
     }
 
+    // Still typing: the effect re-runs (cancelling any in-flight fetch) on every
+    // keystroke, but only the settled value gets to hit the network.
+    if (debouncedQuery !== query) return
+
     let cancelled = false
-    const timer = setTimeout(() => {
-      searchService
-        .searchItems({
-          query: trimmed,
-          topicId: activeTopicId ?? undefined,
-          limit: SUGGESTION_FETCH_LIMIT,
-          nameOnly: true
-        })
-        .then(({ data }) => {
-          if (cancelled) return
-          setSuggestions(rankByTitleMatch(data, trimmed).slice(0, SUGGESTION_LIMIT))
-          setHighlightIndex(-1)
-        })
-    }, SUGGESTION_DEBOUNCE_MS)
+
+    searchService
+      .searchItems({
+        query: trimmed,
+        topicId: activeTopicId ?? undefined,
+        limit: SUGGESTION_FETCH_LIMIT,
+        nameOnly: true
+      })
+      .then(({ data }) => {
+        if (cancelled) return
+        setSuggestions(rankByTitleMatch(data, trimmed).slice(0, SUGGESTION_LIMIT))
+        setHighlightIndex(-1)
+      })
 
     return () => {
       cancelled = true
-      clearTimeout(timer)
     }
-  }, [query, submittedQuery, activeTopicId])
+  }, [query, debouncedQuery, submittedQuery, activeTopicId])
 
   // Reset the enrichment topic choice whenever the question changes.
   useEffect(() => {
@@ -207,13 +209,10 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
     return [...byTopic.values()]
   }, [results])
 
-  /** Flattened display order of the full results. */
-  const flatResults = useMemo(
-    () => groups.flatMap((group) => group.items),
-    [groups]
-  )
-
   const showSuggestions = suggestions.length > 0 && dismissedQuery !== query
+  /** The suggestion the user has arrowed onto, if any. */
+  const highlightedSuggestion =
+    showSuggestions && highlightIndex >= 0 ? suggestions[highlightIndex] : undefined
   /**
    * True when there is a searchable query the user has not committed yet — the
    * only state in which the Enter hint is worth showing.
@@ -238,8 +237,8 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
         event.preventDefault()
         // Enter opens the highlighted suggestion if the user arrowed onto one,
         // otherwise it is what actually launches the full search.
-        if (showSuggestions && highlightIndex >= 0 && suggestions[highlightIndex]) {
-          handleSelect(suggestions[highlightIndex])
+        if (highlightedSuggestion) {
+          handleSelect(highlightedSuggestion)
         } else {
           setSubmittedQuery(query.trim())
         }
@@ -264,7 +263,7 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
         )
       }
     },
-    [suggestions, showSuggestions, highlightIndex, handleSelect, query]
+    [suggestions, showSuggestions, highlightedSuggestion, handleSelect, query]
   )
 
   const handleEnrichmentComplete = useCallback(
@@ -287,11 +286,10 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   const enrichTopic = topics.find(
     (topic) => topic.id === (activeTopicId ?? enrichTopicId)
   )
-  const hasResults = flatResults.length > 0
-  const highlightedOptionId =
-    showSuggestions && highlightIndex >= 0 && suggestions[highlightIndex]
-      ? getOptionId(suggestions[highlightIndex].id)
-      : undefined
+  const hasResults = groups.length > 0
+  const highlightedOptionId = highlightedSuggestion
+    ? getOptionId(highlightedSuggestion.id)
+    : undefined
 
   // Anything below the input counts as "active": the parent uses this to give
   // the results room by collapsing the hero.
@@ -299,6 +297,9 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   useEffect(() => {
     onActiveChange?.(isActive)
   }, [isActive, onActiveChange])
+
+  /** Running position across all result groups, consumed while rendering. */
+  let renderedCount = 0
 
   return (
     <div onKeyDown={handleKeyDown} className="w-full">
@@ -383,8 +384,10 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
                 */}
                 <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
                   {group.items.map((item) => {
-                    const index = flatResults.indexOf(item)
-                    const imageUrl = getImageUrl(item)
+                    // Position in the flattened display order, for the
+                    // staggered entrance below.
+                    const index = renderedCount++
+                    const imageUrl = getItemImageUrl(item)
 
                     return (
                       <motion.button
@@ -446,7 +449,7 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
                 type="button"
                 onClick={() => setEnrichTopicId(topic.id)}
                 aria-label={`Add to ${topic.name}`}
-                className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                className={`${CHIP_BASE} hover:bg-muted`}
               >
                 {topic.icon && <span aria-hidden="true">{topic.icon}</span>}
                 {topic.name}

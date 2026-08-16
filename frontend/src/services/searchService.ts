@@ -16,19 +16,12 @@ export interface SearchItemsParams {
    * unrelated to what was typed.
    */
   nameOnly?: boolean
-  /**
-   * Reserved for metadata-based search. Accepted and ignored today so that
-   * adding it later does not change this signature at any call site.
-   */
-  metadataFilters?: Record<string, unknown>
 }
 
 /** Queries shorter than this never hit the network. */
 export const MIN_QUERY_LENGTH = 2
 
 const DEFAULT_LIMIT = 8
-
-const BACKSLASH = '\\'
 
 /**
  * Escape a query string for embedding in a PostgREST double-quoted `ilike` value.
@@ -53,17 +46,15 @@ const BACKSLASH = '\\'
  * therefore still has that position act as a wildcard. Callers must guard
  * against that separately (see the all-wildcard-characters check below).
  */
+const ILIKE_ESCAPES: Record<string, string> = {
+  '\\': '\\\\\\\\',
+  '"': '\\"',
+  '%': '\\\\%',
+  _: '\\\\_'
+}
+
 function escapeForIlike(query: string): string {
-  return query
-    .split('')
-    .map((char) => {
-      if (char === '\\') return BACKSLASH + BACKSLASH + BACKSLASH + BACKSLASH
-      if (char === '"') return BACKSLASH + '"'
-      if (char === '%') return BACKSLASH + BACKSLASH + '%'
-      if (char === '_') return BACKSLASH + BACKSLASH + '_'
-      return char
-    })
-    .join('')
+  return query.replace(/[\\"%_]/g, (char) => ILIKE_ESCAPES[char])
 }
 
 /**
@@ -93,11 +84,7 @@ export const searchService = {
     const { query, topicId, limit = DEFAULT_LIMIT, nameOnly = false } = params
     const trimmed = query.trim()
 
-    if (trimmed.length < MIN_QUERY_LENGTH) {
-      return { data: [], error: null }
-    }
-
-    if (isOnlyWildcardCharacters(trimmed)) {
+    if (trimmed.length < MIN_QUERY_LENGTH || isOnlyWildcardCharacters(trimmed)) {
       return { data: [], error: null }
     }
 

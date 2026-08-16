@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { getItemImageUrl } from '@/lib/itemImage'
 import { Plus, Check, X } from 'lucide-react'
 import { LazyImage } from './LazyImage'
 
@@ -76,23 +77,6 @@ function isNewRelease(item: Item): boolean {
 }
 
 /**
- * Get image URL with fallback chain: image_url -> metadata.poster_url -> metadata.image.
- */
-function getImageUrl(item: Item): string | null {
-  if (item.image_url) return item.image_url
-
-  if (item.metadata?.poster_url && typeof item.metadata.poster_url === 'string') {
-    return item.metadata.poster_url
-  }
-
-  if (item.metadata?.image && typeof item.metadata.image === 'string') {
-    return item.metadata.image
-  }
-
-  return null
-}
-
-/**
  * Item card component displaying item details with rating capability.
  *
  * Features:
@@ -147,7 +131,7 @@ const ItemCardComponent = ({
     () => !prefersReducedMotion && !disableHoverAnimation,
     [prefersReducedMotion, disableHoverAnimation]
   )
-  const imageUrl = useMemo(() => getImageUrl(item), [item])
+  const imageUrl = useMemo(() => getItemImageUrl(item), [item])
   const isNew = useMemo(() => isNewRelease(item), [item])
 
   // Sync state with prop when initialUserRating changes (e.g., async batch load)

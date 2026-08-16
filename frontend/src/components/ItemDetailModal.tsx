@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
 import { LazyImage } from './LazyImage'
+import { getItemImageUrl } from '@/lib/itemImage'
 import { Plus, Check, X } from 'lucide-react'
 import type { Item, Topic } from '@/types'
 
@@ -78,23 +79,6 @@ function formatMetadataValue(value: unknown): string {
 }
 
 /**
- * Get image URL with fallback chain.
- */
-function getImageUrl(item: Item): string | null {
-  if (item.image_url) return item.image_url
-
-  if (item.metadata?.poster_url && typeof item.metadata.poster_url === 'string') {
-    return item.metadata.poster_url
-  }
-
-  if (item.metadata?.image && typeof item.metadata.image === 'string') {
-    return item.metadata.image
-  }
-
-  return null
-}
-
-/**
  * Item detail modal displaying full item information.
  *
  * Features:
@@ -134,7 +118,7 @@ const ItemDetailModalComponent = ({
     () => topicMetadataConfig[topicSlug] || [],
     [topicSlug]
   )
-  const imageUrl = useMemo(() => getImageUrl(item), [item])
+  const imageUrl = useMemo(() => getItemImageUrl(item), [item])
 
   const handleTodoClick = useCallback(() => {
     if (isInTodo) {

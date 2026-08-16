@@ -91,15 +91,15 @@ export function FaqSection() {
     <section id={FAQ_ANCHOR_ID} aria-label="Frequently asked questions" className="py-16">
       <div className="flex flex-col gap-16">
         {FAQ_BANDS.map((band, index) => {
-          const align = index % 2 === 0 ? 'left' : 'right'
+          const isLeft = index % 2 === 0
 
           return (
             <motion.div
               key={band.id}
               data-faq-band={band.id}
-              data-align={align}
-              className={`flex ${align === 'left' ? 'justify-start' : 'justify-end'}`}
-              initial={prefersReducedMotion ? false : { opacity: 0, x: align === 'left' ? -40 : 40 }}
+              data-align={isLeft ? 'left' : 'right'}
+              className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}
+              initial={prefersReducedMotion ? false : { opacity: 0, x: isLeft ? -40 : 40 }}
               {...(!prefersReducedMotion && {
                 whileInView: { opacity: 1, x: 0 },
                 viewport: { once: true, amount: 0.4 },
@@ -108,7 +108,7 @@ export function FaqSection() {
             >
               <div
                 className={`w-full max-w-xl ${
-                  align === 'left'
+                  isLeft
                     ? 'border-l-2 border-foreground/20 pl-6'
                     : 'text-right border-r-2 border-foreground/20 pr-6'
                 }`}

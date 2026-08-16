@@ -1,8 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Github } from 'lucide-react'
+import { GITHUB_REPO, GITHUB_REPO_URL } from '@/lib/links'
 
-const REPO = 'Zartof23/mytops'
-const REPO_URL = `https://github.com/${REPO}`
+/**
+ * Star count, fetched at most once per page load however many badges render.
+ * GitHub's anonymous API allows 60 requests an hour per IP, and the badge
+ * appears both in the navbar and in the FAQ.
+ */
+let starsPromise: Promise<number | null> | null = null
+
+function fetchStars(): Promise<number | null> {
+  starsPromise ??= fetch(`https://api.github.com/repos/${GITHUB_REPO}`)
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => (typeof data?.stargazers_count === 'number' ? data.stargazers_count : null))
+    .catch(() => null)
+
+  return starsPromise
+}
 
 interface GitHubStarBadgeProps {
   /** `default` gives the roomier navbar treatment. */
@@ -19,34 +33,20 @@ export function GitHubStarBadge({ size = 'sm' }: GitHubStarBadgeProps) {
   const [stars, setStars] = useState<number | null>(null)
 
   useEffect(() => {
-    const abortController = new AbortController()
+    let cancelled = false
 
-    async function fetchStars() {
-      try {
-        const response = await fetch(`https://api.github.com/repos/${REPO}`, {
-          signal: abortController.signal
-        })
-        if (!response.ok) return
-
-        const data = await response.json()
-        if (typeof data.stargazers_count === 'number') {
-          setStars(data.stargazers_count)
-        }
-      } catch {
-        // Silently ignore - badge just shows without a count
-      }
-    }
-
-    fetchStars()
+    fetchStars().then((count) => {
+      if (!cancelled) setStars(count)
+    })
 
     return () => {
-      abortController.abort()
+      cancelled = true
     }
   }, [])
 
   return (
     <a
-      href={REPO_URL}
+      href={GITHUB_REPO_URL}
       target="_blank"
       rel="noopener noreferrer"
       className={`inline-flex items-center gap-1.5 rounded-md border font-medium hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
