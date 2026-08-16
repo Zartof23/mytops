@@ -44,8 +44,11 @@ const FAQ_BANDS: FaqBand[] = [
       <>
         I wanted one organized, private list of my favorites across everything,
         and nothing covered all of it — especially the unconventional and indie
-        picks. So the database gets built by AI, on demand, as people search. It
-        grows because you use it.
+        picks. Building a database that contains everything anyone could ever
+        want is impossible. So I figured the database itself could be built on
+        demand. This site is mostly a proof of concept of that idea: the
+        database gets built by AI as people search. Things get imported, and
+        then they're there for everyone. It grows because you use it.
       </>
     )
   },
