@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@/test/utils'
+import { render, screen, fireEvent } from '@/test/utils'
 import userEvent from '@testing-library/user-event'
 import { FlagItemModal, flagPlaceholderForTopic } from './FlagItemModal'
 import { flagService, DUPLICATE_FLAG_MESSAGE } from '@/services/flagService'
@@ -46,17 +46,21 @@ describe('FlagItemModal', () => {
     expect(field).toHaveAttribute('placeholder', expect.stringContaining('seasons'))
   })
 
-  it('keeps submit disabled until 10 characters are entered', async () => {
-    const user = userEvent.setup()
+  it('keeps submit disabled until 10 characters are entered', () => {
     render(<FlagItemModal item={item('movies')} open onOpenChange={vi.fn()} />)
 
     const submit = screen.getByRole('button', { name: /send report/i })
+    const field = screen.getByLabelText(/what's wrong/i)
     expect(submit).toBeDisabled()
 
-    await user.type(screen.getByLabelText(/what's wrong/i), 'too short')
+    // A single fireEvent.change sets the whole value at once instead of
+    // simulating each keystroke — the behaviour under test is the length
+    // threshold, not the act of typing, and per-keystroke real events are
+    // the dominant, CPU-load-sensitive cost in this suite.
+    fireEvent.change(field, { target: { value: 'too short' } })
     expect(submit).toBeDisabled()
 
-    await user.type(screen.getByLabelText(/what's wrong/i), ' but now it is long enough')
+    fireEvent.change(field, { target: { value: 'too short but now it is long enough' } })
     expect(submit).toBeEnabled()
   })
 
@@ -68,12 +72,15 @@ describe('FlagItemModal', () => {
 
     render(<FlagItemModal item={item('movies')} open onOpenChange={onOpenChange} onFlagged={onFlagged} />)
 
-    await user.type(screen.getByLabelText(/what's wrong/i), 'The director is listed as the wrong person')
+    fireEvent.change(screen.getByLabelText(/what's wrong/i), {
+      target: { value: 'The director is listed as the wrong person' }
+    })
     await user.click(screen.getByRole('button', { name: /send report/i }))
 
-    await waitFor(() => expect(flagService.createFlag).toHaveBeenCalledWith(
+    await screen.findByDisplayValue('')
+    expect(flagService.createFlag).toHaveBeenCalledWith(
       'item-1', 'The director is listed as the wrong person'
-    ))
+    )
     expect(onFlagged).toHaveBeenCalled()
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
@@ -87,7 +94,9 @@ describe('FlagItemModal', () => {
 
     render(<FlagItemModal item={item('movies')} open onOpenChange={onOpenChange} />)
 
-    await user.type(screen.getByLabelText(/what's wrong/i), 'The director is listed as the wrong person')
+    fireEvent.change(screen.getByLabelText(/what's wrong/i), {
+      target: { value: 'The director is listed as the wrong person' }
+    })
     await user.click(screen.getByRole('button', { name: /send report/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(DUPLICATE_FLAG_MESSAGE)
