@@ -1,5 +1,5 @@
 import { useCallback, useId } from 'react'
-import { Search, Loader2 } from 'lucide-react'
+import { Search, Loader2, CornerDownLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import type { Topic } from '@/types'
 
@@ -11,6 +11,12 @@ export interface SearchInputProps {
   ariaLabel: string
   /** Shows an inline spinner with a polite live region. */
   isSearching?: boolean
+  /**
+   * Show an Enter-key badge at the end of the field. For a parent that only
+   * runs its query on Enter, this is the only thing telling the user that
+   * typing alone does nothing. Yields to the spinner, which shares the slot.
+   */
+  showEnterHint?: boolean
   /** Scope chips. Omit entirely to hide the chip row. */
   topics?: Topic[]
   /** Currently selected scope. `null` means "all topics". */
@@ -49,6 +55,7 @@ export function SearchInput({
   placeholder,
   ariaLabel,
   isSearching = false,
+  showEnterHint = false,
   topics,
   activeTopicId = null,
   onTopicChange,
@@ -95,8 +102,26 @@ export function SearchInput({
           aria-controls={role === 'combobox' ? ariaControls : undefined}
           aria-activedescendant={role === 'combobox' ? ariaActiveDescendant : undefined}
           aria-autocomplete={role === 'combobox' ? 'list' : undefined}
-          className={size === 'hero' ? 'h-14 pl-11 text-base' : 'h-10 pl-9'}
+          aria-describedby={showEnterHint ? `${inputId}-enter-hint` : undefined}
+          className={`${size === 'hero' ? 'h-14 pl-11 text-base' : 'h-10 pl-9'} ${
+            // Keep the text from running underneath the badge.
+            showEnterHint && !isSearching ? 'pr-24' : 'pr-3'
+          }`}
         />
+        {showEnterHint && (
+          <span id={`${inputId}-enter-hint`} className="sr-only">
+            Press Enter to search
+          </span>
+        )}
+        {showEnterHint && !isSearching && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 select-none items-center gap-1 rounded border bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground"
+          >
+            <CornerDownLeft className="h-3 w-3" />
+            Enter
+          </span>
+        )}
         {isSearching && (
           <span
             className="absolute right-3 top-1/2 -translate-y-1/2"

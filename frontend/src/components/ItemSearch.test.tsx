@@ -145,6 +145,22 @@ describe('ItemSearch', () => {
     expect(screen.getByLabelText('Search everything')).toHaveValue('dune')
   })
 
+  it('shows the Enter hint only while a typed query is uncommitted', async () => {
+    render(<ItemSearch onSelectItem={vi.fn()} />)
+    expect(screen.queryByText('Press Enter to search')).not.toBeInTheDocument()
+
+    type('d')
+    expect(screen.queryByText('Press Enter to search')).not.toBeInTheDocument()
+
+    type('dune')
+    expect(screen.getByText('Press Enter to search')).toBeInTheDocument()
+
+    fireEvent.keyDown(screen.getByLabelText('Search everything'), { key: 'Enter' })
+    await waitFor(() => {
+      expect(screen.queryByText('Press Enter to search')).not.toBeInTheDocument()
+    })
+  })
+
   it('does not search for queries shorter than the minimum', async () => {
     render(<ItemSearch onSelectItem={vi.fn()} />)
     search('d')

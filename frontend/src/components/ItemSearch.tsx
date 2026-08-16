@@ -214,6 +214,12 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
   )
 
   const showSuggestions = suggestions.length > 0 && dismissedQuery !== query
+  /**
+   * True when there is a searchable query the user has not committed yet — the
+   * only state in which the Enter hint is worth showing.
+   */
+  const hasPendingQuery =
+    query.trim().length >= MIN_QUERY_LENGTH && query.trim() !== submittedQuery
 
   const handleSelect = useCallback(
     (item: SearchResultItem) => {
@@ -303,6 +309,7 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
           placeholder="What are you looking for?"
           ariaLabel="Search everything"
           isSearching={isSearching}
+          showEnterHint={hasPendingQuery}
           size="hero"
           topics={topics}
           activeTopicId={activeTopicId}

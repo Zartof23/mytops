@@ -116,7 +116,7 @@ mytops/
 - Profile management, TODO lists
 - AI-powered item enrichment (search + add new items)
 - Responsive UI with dark/light mode
-- 185 tests across components, services, pages
+- 186 tests across components, services, pages
 
 ### Known Limitations
 - No personalized recommendations (MVP 3)

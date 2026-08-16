@@ -11,6 +11,14 @@
  * moment the animation ends, making the bands flash and vanish. At `z-0` the
  * bands paint above the layout's background unconditionally; the page content
  * sits above them on its own `relative z-10` wrapper.
+ *
+ * The seams between bands are softened with a plain `blur` on this element, not
+ * with a `backdrop-blur` overlay. A backdrop filter is a second compositing
+ * pass over a snapshot of what sits behind it, so the first painted frame shows
+ * the bands raw and full-strength before the blur resolves — visible as a flash
+ * of saturated colour on load. The container is inset negatively so the blur's
+ * own soft edges fall outside the viewport rather than showing as a pale
+ * border.
  */
 
 /** One hue per topic, in the order the topics are listed across the product. */
@@ -28,7 +36,7 @@ export function TopicBands() {
     <div
       aria-hidden="true"
       data-testid="topic-bands"
-      className="pointer-events-none fixed inset-0 z-0 flex select-none"
+      className="pointer-events-none fixed -inset-32 z-0 flex select-none blur-[60px]"
     >
       {BAND_COLORS.map((color, index) => (
         <div
@@ -44,8 +52,6 @@ export function TopicBands() {
           }}
         />
       ))}
-      {/* Soften the vertical seams between bands. */}
-      <div className="absolute inset-0 backdrop-blur-[60px]" />
     </div>
   )
 }

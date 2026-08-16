@@ -16,6 +16,18 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-16] Enter-Key Hint, Single-Pass Band Blur
+
+**What**:
+- `SearchInput` gained a `showEnterHint` prop: a small ⏎ Enter badge at the end of the field, plus an `aria-describedby` "Press Enter to search" for screen readers. `ItemSearch` shows it only while the typed query is long enough and not yet submitted; the badge yields the slot to the searching spinner.
+- **Fixed**: the topic bands flashed at full saturation before settling. The seam-softening blur was a `backdrop-blur` overlay, and a backdrop filter is a second compositing pass over a snapshot of what sits behind it — the first painted frame shows the bands raw. Replaced with a plain `blur-[60px]` on the band container itself, which is part of the element's own paint, with the container inset negatively (`-inset-32`) so the blur's soft edges fall outside the viewport.
+
+**Why**: With the query committed only on Enter, nothing in the UI said so — the hint is the affordance for the interaction model chosen on 2026-08-15. The band flash was the second of two separate defects in the same component; the first (z-index) was fixed earlier the same day.
+
+**Breaking**: None.
+
+**Files Changed**: `frontend/src/components/SearchInput.tsx`, `ItemSearch.tsx`, `ItemSearch.test.tsx`, `TopicBands.tsx`.
+
 ### [2026-08-16] Search Suggestions Restored, Poster-Shaped Cards, Topic-Band Z-Index Fix
 
 **What**:
