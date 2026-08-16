@@ -1,3 +1,6 @@
+-- Recovered from the remote migration history on 2026-08-16.
+-- Already applied in production; do not re-apply remotely.
+
 -- Migration: Create user_todo_lists table for per-topic TODO lists
 -- This allows users to save items they want to watch/play/read later
 
@@ -60,4 +63,4 @@ CREATE TRIGGER trigger_user_todo_lists_updated_at
     EXECUTE FUNCTION public.update_user_todo_lists_updated_at();
 
 -- Add comment for documentation
-COMMENT ON TABLE public.user_todo_lists IS 'Per-topic TODO lists for users to track items they want to watch/play/read later';
+COMMENT ON TABLE public.user_todo_lists IS 'Per-topic TODO lists for users to track items they want to watch/play/read later';;

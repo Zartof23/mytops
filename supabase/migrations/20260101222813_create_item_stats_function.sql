@@ -1,6 +1,7 @@
+-- Recovered from the remote migration history on 2026-08-16.
+-- Already applied in production; do not re-apply remotely.
+
 -- Migration: Create get_items_with_stats function for server-side filtering
--- This function returns items with computed avg_rating and rating_count,
--- enabling server-side filtering by rating and release date
 
 CREATE OR REPLACE FUNCTION public.get_items_with_stats(
     p_topic_id UUID,
@@ -46,16 +47,13 @@ BEGIN
     FROM public.items i
     LEFT JOIN public.user_ratings r ON r.item_id = i.id
     WHERE i.topic_id = p_topic_id
-      -- Search by name (case-insensitive)
       AND (p_search_query IS NULL OR i.name ILIKE '%' || p_search_query || '%')
-      -- Filter by release date from metadata
       AND (
           p_released_after IS NULL
           OR (i.metadata->>'release_date')::date >= p_released_after
           OR (i.metadata->>'year')::int >= EXTRACT(YEAR FROM p_released_after)::int
       )
     GROUP BY i.id
-    -- Filter by minimum average rating (only items with ratings)
     HAVING (
         p_min_avg_rating IS NULL
         OR (COUNT(r.id) > 0 AND COALESCE(AVG(r.rating), 0) >= p_min_avg_rating)
@@ -66,12 +64,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant execute permission
 GRANT EXECUTE ON FUNCTION public.get_items_with_stats TO anon, authenticated;
 
--- Add comment for documentation
 COMMENT ON FUNCTION public.get_items_with_stats IS 'Get items with computed stats, supporting server-side filtering by rating and release date';
-
 
 -- Create a separate function to get total count for pagination
 CREATE OR REPLACE FUNCTION public.get_items_with_stats_count(
@@ -107,8 +102,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant execute permission
 GRANT EXECUTE ON FUNCTION public.get_items_with_stats_count TO anon, authenticated;
 
--- Add comment for documentation
-COMMENT ON FUNCTION public.get_items_with_stats_count IS 'Get total count of items matching filters for pagination';
+COMMENT ON FUNCTION public.get_items_with_stats_count IS 'Get total count of items matching filters for pagination';;

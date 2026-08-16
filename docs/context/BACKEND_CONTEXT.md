@@ -397,6 +397,24 @@ const { data } = await supabase
 
 ---
 
+## Database changes
+
+- `supabase/migrations/` mirrors the remote migration history in `supabase_migrations.schema_migrations`, one file per version. It is the source of truth for rebuilding a local database from scratch.
+- Every schema change ships as a new migration file committed to git. Nothing is created only in the Supabase dashboard.
+- The fifteen migration files recovered on 2026-08-16 (`20251229001149_initial_schema.sql` through `20260111220735_add_review_pending_to_items.sql`) are already applied in production and must never be re-applied there.
+
+### Foreign key delete rules
+
+| Constraint | On delete |
+|---|---|
+| `user_ratings_item_id_fkey` | CASCADE |
+| `user_todo_lists_item_id_fkey` | CASCADE |
+| `user_enrichment_requests_result_item_id_fkey` | SET NULL |
+
+Deleting an item removes its ratings and TODO entries, and nulls `result_item_id` on any enrichment request that produced it. No corrective `alter` is needed for these three.
+
+---
+
 ## Security Checklist
 
 Before committing backend changes:
