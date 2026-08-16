@@ -106,6 +106,8 @@ alter table public.item_flags enable row level security;
 
 Hard `DELETE`. The pre-flight check is a separate read so the warning and the action cannot disagree about what would be severed.
 
+The TODO table is named `user_todo_lists`. Its `item_id` FK already declares `on delete cascade`; `user_ratings` was created outside tracked migrations and its FK must be verified before the forced delete is relied upon.
+
 ```sql
 -- Raises insufficient_privilege unless is_admin().
 -- Returns { rating_count, todo_count, flag_count, raters: [display_name, ...] }
