@@ -1,4 +1,5 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -117,8 +118,17 @@ const ItemDetailModalComponent = ({
   alreadyFlagged = false,
   onRequireLogin
 }: ItemDetailModalProps) => {
+  const navigate = useNavigate()
   const [flagOpen, setFlagOpen] = useState(false)
   const [flagged, setFlagged] = useState(alreadyFlagged)
+  const flaggedItemId = useRef(item?.id)
+
+  useEffect(() => {
+    if (flaggedItemId.current !== item?.id) {
+      flaggedItemId.current = item?.id
+      setFlagged(alreadyFlagged)
+    }
+  }, [item?.id, alreadyFlagged])
 
   const topicSlug = item?.topic?.slug || ''
   const metadataFields = useMemo(
@@ -137,11 +147,17 @@ const ItemDetailModalComponent = ({
 
   const handleFlagClick = useCallback(() => {
     if (!isAuthenticated) {
-      onRequireLogin?.()
+      // Default to the login route: no parent passes onRequireLogin, and a
+      // button that silently does nothing is worse than a redirect.
+      if (onRequireLogin) {
+        onRequireLogin()
+      } else {
+        navigate('/login')
+      }
       return
     }
     setFlagOpen(true)
-  }, [isAuthenticated, onRequireLogin])
+  }, [isAuthenticated, onRequireLogin, navigate])
 
   if (!item) return null
 
