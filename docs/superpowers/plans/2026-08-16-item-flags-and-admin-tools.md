@@ -3610,6 +3610,188 @@ Use the superpowers:requesting-code-review skill. Ask specifically about the RLS
 
 ---
 
+### Task 16: Fix enrichment status writes and harden the RPC surface
+
+**Files:**
+- Modify: `supabase/functions/ai-enrich-item/index.ts`
+- Create: one migration, name `harden_rpc_surface`
+- Modify: `docs/context/BACKEND_CONTEXT.md`, `docs/CHANGELOG.md`
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks.
+- Produces: no new exports. `check_enrichment_rate_limit` gains a pinned `search_path`; `anon` loses EXECUTE on the admin RPCs.
+
+**Why this task exists.** Found while investigating a row-count discrepancy during Task 7, then confirmed against the live database and the Supabase security advisors. These are pre-existing production bugs, unrelated to the flagging feature, added at the owner's request.
+
+---
+
+#### Defect 1 — enrichment request status is never written (user-visible)
+
+`public.user_enrichment_requests` has exactly two RLS policies:
+
+| Policy | Command |
+|---|---|
+| `Users can create own requests` | INSERT |
+| `Users can view own requests` | SELECT |
+
+**There is no UPDATE policy.** `ai-enrich-item/index.ts` performs all of its status bookkeeping through
+`supabaseClient` — the *user-scoped* client — so every `update({ status: 'completed' | 'failed', ... })`
+matches zero rows. PostgREST reports no error for an update that matches nothing, and the code does not
+check the result, so it fails completely silently.
+
+Live evidence: 10 rows sit in `processing`, 12 in `failed`, and **zero have ever reached `completed`** —
+including the request from 2026-08-16 17:07 whose item ("Gladiator") was created successfully seconds later.
+
+This is not cosmetic. `check_enrichment_rate_limit` counts:
+
+```sql
+where user_id = p_user_id and created_at >= CURRENT_DATE and status != 'failed'
+```
+
+Failed attempts are *designed* to not consume quota. Because the `failed` write silently no-ops, **every
+failed enrichment permanently burns one of the user's 5 daily requests.** A user whose searches fail can
+be locked out for the rest of the day by attempts that were meant to be free.
+
+**Fix: use the service-role client for the status writes, not an UPDATE policy.**
+
+Adding a user-facing UPDATE policy would be a *rate-limit bypass vulnerability* — a user could set their
+own rows to `status = 'failed'` and reset their quota at will. Request status is server-managed state and
+belongs to the service role.
+
+In `ai-enrich-item/index.ts`, construct a service-role client once:
+
+```ts
+const serviceClient = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+```
+
+and use it for **every** `user_enrichment_requests` UPDATE — there are several: the `failed` path when
+extraction finds nothing, the `failed` path on insert error, the `completed` path, and the
+`inFlightRequestId` cleanup in the outer catch. Leave the INSERT on the user-scoped client, since the
+INSERT policy correctly enforces `auth.uid() = user_id`.
+
+**Check the error on each of these updates** and `console.error` it. A silent no-op is what hid this bug
+for months.
+
+Do not change any other behaviour in this function — the extraction pipeline, rate limiting, and response
+shapes stay exactly as they are.
+
+**Historical rows: leave them alone.** The 10 stuck `processing` rows cannot be reliably reconciled, because
+`result_item_id` was written by the same update that silently failed, so it is null everywhere. Rewriting
+them would be guesswork against real user data. Note the situation in the CHANGELOG and move on.
+
+#### Defect 2 — `check_enrichment_rate_limit` has a mutable search_path
+
+Flagged by the Supabase linter (`function_search_path_mutable`). It is `SECURITY DEFINER` with
+`proconfig = null`, so its `search_path` is caller-controlled — the exact exploit shape the project's own
+earlier `fix_function_search_path` migration was written to close, missed on a function added later.
+
+Fix in the migration, preserving the body exactly as it currently exists:
+
+```sql
+alter function public.check_enrichment_rate_limit(uuid) set search_path = public;
+```
+
+Verify afterwards that `proconfig` is `{search_path=public}` and that the function still returns the same
+result for a real user id.
+
+The linter flags four other functions for the same reason (`update_user_todo_lists_updated_at`,
+`get_items_with_stats`, `get_items_with_stats_count`, `get_user_ratings_for_items`). **Fix those too** —
+it is the same one-line `alter` per function, they are all `SECURITY DEFINER`, and leaving known instances
+of a fixed vulnerability class in place is worse than the small scope increase.
+
+#### Defect 3 — `anon` can execute the admin RPCs
+
+Supabase's default privileges grant EXECUTE on new `public` functions to both `anon` and `authenticated`.
+Task 1 and Task 6 did `revoke all ... from public`, which correctly removed the `PUBLIC` grant but **not**
+the explicit `anon` grant. Confirmed live — `proacl` for `admin_delete_item`, `admin_item_links`, and
+`is_admin` all contain `anon=X/postgres`.
+
+**This is not currently exploitable:** `is_admin()` resolves `auth.uid()` to null for `anon` and
+`coalesce(..., false)` returns false, so all three fail closed with `42501`. But there is no reason for an
+unauthenticated caller to be able to invoke a hard-delete RPC at all, and the advisor flags it.
+
+```sql
+revoke execute on function public.is_admin() from anon;
+revoke execute on function public.admin_item_links(uuid) from anon;
+revoke execute on function public.admin_delete_item(uuid, boolean) from anon;
+```
+
+Afterwards, re-run the Task 6 verification that an authenticated non-admin still gets `42501` (not a
+permission error from the wrong layer), and confirm the admin path still works.
+
+---
+
+- [ ] **Step 1: Write and apply the migration**
+
+Combine Defects 2 and 3 into one migration, name `harden_rpc_surface`. Apply with
+`mcp__supabase__apply_migration`, then commit the file under the version `list_migrations` assigns.
+
+- [ ] **Step 2: Verify the migration**
+
+```sql
+select proname, proacl::text, proconfig::text from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and proname in ('is_admin','admin_item_links','admin_delete_item',
+                  'check_enrichment_rate_limit','get_items_with_stats',
+                  'get_items_with_stats_count','get_user_ratings_for_items',
+                  'update_user_todo_lists_updated_at');
+```
+
+Every row must show `search_path=public` in `proconfig`, and the three admin functions must no longer list
+`anon=X`. Then re-run `mcp__supabase__get_advisors` with `type: "security"` and confirm the
+`function_search_path_mutable` warnings are gone.
+
+- [ ] **Step 3: Fix the Edge Function**
+
+Make the `ai-enrich-item` changes described under Defect 1. Deploy with
+`mcp__supabase__deploy_edge_function`, `name: "ai-enrich-item"`, `verify_jwt: true`, entrypoint
+`index.ts`, and the **full five-file manifest** including every `_shared/*.ts` module — the same manifest
+used for version 10. A deploy that drops a shared module fails only at runtime.
+
+- [ ] **Step 4: Verify the deploy boots**
+
+The function cannot be exercised end-to-end without a user JWT, but you can prove the module graph loads
+and the handler runs. Using the anon key as a bearer token (it is a valid JWT):
+
+```bash
+ANON="<anon key from mcp__supabase__get_publishable_keys>"
+U="https://ocasihbuejfjirsrnxzq.supabase.co/functions/v1/ai-enrich-item"
+curl -s -w "\nHTTP %{http_code}\n" -X GET  "$U" -H "Authorization: Bearer $ANON" -H "apikey: $ANON"
+curl -s -w "\nHTTP %{http_code}\n" -X POST "$U" -H "Authorization: Bearer $ANON" -H "apikey: $ANON" \
+  -H "Content-Type: application/json" -d '{"topic_id":"x","topic_slug":"movies","search_query":"zzz"}'
+curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS "$U"
+```
+
+Expect `405 Method not allowed`, `401 Invalid authentication`, and `200` respectively — identical to
+version 10's behaviour. A 500 or a boot error means a module is missing from the manifest.
+
+- [ ] **Step 5: Confirm no data was touched**
+
+`items = 13`, `user_ratings = 5`, `user_todo_lists = 8`, and the `user_enrichment_requests` status
+distribution unchanged (10 `processing`, 12 `failed`). This task fixes forward behaviour only.
+
+- [ ] **Step 6: Document and commit**
+
+Record all three defects in `docs/CHANGELOG.md` — including the rate-limit consequence of Defect 1 and the
+explicit reasoning that an UPDATE policy was rejected as a bypass vector. Add to
+`docs/context/BACKEND_CONTEXT.md`: server-managed state on user-owned tables is written with the
+service-role client, never by granting the user an UPDATE policy.
+
+```bash
+git add supabase docs
+git commit -m "fix: write enrichment status with the service role and harden RPC grants"
+```
+
+**Left for the owner (dashboard setting, not code):** the linter also reports leaked-password protection
+is disabled. Enabling it checks new passwords against HaveIBeenPwned. That is a Supabase Auth dashboard
+toggle and is not part of this task.
+
+---
+
 ## Deferred / out of scope
 
 Do not build these:
