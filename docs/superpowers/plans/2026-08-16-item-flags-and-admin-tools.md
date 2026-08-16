@@ -1276,6 +1276,211 @@ git commit -m "feat: add item flag modal with bug-icon trigger"
 
 ---
 
+### Task 5b: Make the flag trigger work for signed-out users and across items
+
+**Files:**
+- Modify: `frontend/src/components/ItemDetailModal.tsx`
+- Test: `frontend/src/components/ItemDetailModal.test.tsx` (create)
+
+**Interfaces:**
+- Consumes: `FlagItemModal` (Task 5).
+- Produces: no new exports. `onRequireLogin` remains an optional override; its absence no longer breaks the signed-out path.
+
+**Why this task exists.** Task 5 shipped two latent defects, both confirmed against the codebase:
+
+1. **The bug icon is dead for signed-out users.** `handleFlagClick` calls `onRequireLogin?.()` when `isAuthenticated` is false, but neither `HomePage.tsx` nor `TopicDetailPage.tsx` passes that prop — they pass `isAuthenticated` and nothing else. So a signed-out visitor clicks "Report a problem" and nothing at all happens. The tooltip promises a login; the button delivers silence.
+2. **The `flagged` badge goes stale across items.** `const [flagged, setFlagged] = useState(alreadyFlagged)` seeds only on mount, and `ItemDetailModal` stays mounted while the user opens one item after another. Flag item A, close, open item B — B still shows "Reported".
+
+Fix both in the component rather than in every parent. A prop that every caller must remember to pass, to avoid a dead button, is a worse design than a component that handles its own default.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `frontend/src/components/ItemDetailModal.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@/test/utils'
+import userEvent from '@testing-library/user-event'
+import { ItemDetailModal } from './ItemDetailModal'
+import type { Item, Topic } from '@/types'
+
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => mockNavigate }
+})
+
+const makeItem = (id: string, name: string): Item & { topic?: Topic } => ({
+  id, topic_id: 't1', name, slug: name.toLowerCase().replace(/\s+/g, '-'),
+  description: null, metadata: null, image_url: null, source: 'ai_generated',
+  ai_confidence: 0.9, created_by: null,
+  created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  topic: {
+    id: 't1', name: 'Movies', slug: 'movies', description: null, icon: null,
+    image_url: null, schema_template: null,
+    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z'
+  }
+})
+
+describe('ItemDetailModal flag trigger', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('sends a signed-out user to login when no override is provided', async () => {
+    const user = userEvent.setup()
+    render(
+      <ItemDetailModal
+        item={makeItem('i1', 'Blade Runner')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /report incorrect information/i }))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/login')
+  })
+
+  it('prefers an explicit onRequireLogin override over navigating', async () => {
+    const user = userEvent.setup()
+    const onRequireLogin = vi.fn()
+    render(
+      <ItemDetailModal
+        item={makeItem('i1', 'Blade Runner')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated={false}
+        onRequireLogin={onRequireLogin}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /report incorrect information/i }))
+
+    expect(onRequireLogin).toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('does not navigate for a signed-in user', async () => {
+    const user = userEvent.setup()
+    render(
+      <ItemDetailModal
+        item={makeItem('i1', 'Blade Runner')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /report incorrect information/i }))
+
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('clears the reported badge when a different item is shown', () => {
+    const { rerender } = render(
+      <ItemDetailModal
+        item={makeItem('i1', 'Blade Runner')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated
+        alreadyFlagged
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /already reported/i })).toBeInTheDocument()
+
+    rerender(
+      <ItemDetailModal
+        item={makeItem('i2', 'Arrival')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated
+        alreadyFlagged={false}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /report incorrect information/i })).toBeInTheDocument()
+  })
+})
+```
+
+The `rerender` in the last test is deliberate: it reproduces the real situation, where the component stays mounted and only its `item` prop changes.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd frontend && npm test -- --run src/components/ItemDetailModal.test.tsx`
+Expected: FAIL — the signed-out click does nothing (no navigate), and the badge stays "Reported" after the rerender.
+
+- [ ] **Step 3: Implement**
+
+In `frontend/src/components/ItemDetailModal.tsx`:
+
+Add the import:
+
+```tsx
+import { useNavigate } from 'react-router-dom'
+```
+
+Inside the component, add the hook alongside the other hooks — above the `if (!item) return null` guard, so the hook order stays unconditional:
+
+```tsx
+  const navigate = useNavigate()
+```
+
+Replace `handleFlagClick` with:
+
+```tsx
+  const handleFlagClick = useCallback(() => {
+    if (!isAuthenticated) {
+      // Default to the login route: no parent passes onRequireLogin, and a
+      // button that silently does nothing is worse than a redirect.
+      if (onRequireLogin) {
+        onRequireLogin()
+      } else {
+        navigate('/login')
+      }
+      return
+    }
+    setFlagOpen(true)
+  }, [isAuthenticated, onRequireLogin, navigate])
+```
+
+Then reseed `flagged` when the item changes. Add, next to the other hooks:
+
+```tsx
+  const flaggedItemId = useRef(item?.id)
+
+  useEffect(() => {
+    if (flaggedItemId.current !== item?.id) {
+      flaggedItemId.current = item?.id
+      setFlagged(alreadyFlagged)
+    }
+  }, [item?.id, alreadyFlagged])
+```
+
+Add `useEffect` and `useRef` to the existing `react` import. Keep every hook above the `if (!item) return null` guard — Task 5 fixed a Rules-of-Hooks violation here, do not reintroduce one.
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd frontend && npm test -- --run src/components/ItemDetailModal.test.tsx`
+Expected: PASS, 4 tests.
+
+- [ ] **Step 5: Run the full suite and build**
+
+Run: `cd frontend && npm test -- --run && npm run build`
+Expected: both PASS. The `react-router-dom` mock is scoped to this test file, so it must not affect others.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add frontend/src/components/ItemDetailModal.tsx frontend/src/components/ItemDetailModal.test.tsx
+git commit -m "fix: make the flag trigger work when signed out and across items"
+```
+
+**Deliberately not done here:** wiring `alreadyFlagged` from the parent pages. Doing that needs a `getMyFlagForItem` lookup per rendered item, and the duplicate path already fails gracefully — `flagService` maps the `23505` unique violation to "You've already flagged this one — it's sitting in the queue." The badge is an optimization, not a correctness requirement, and it is not worth a query per card.
+
+---
+
 ### Task 6: Admin item RPCs and audit log
 
 **Files:**
