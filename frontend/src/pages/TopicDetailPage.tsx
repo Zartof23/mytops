@@ -589,6 +589,16 @@ export function TopicDetailPage() {
     setSearchQuery('')
   }, [])
 
+  /**
+   * After an admin deletes or rescans the selected item, refetch the current
+   * page with the exact params in effect (search/filter/page) so the grid
+   * reflects it — reusing fetchItems rather than resetting pagination/search.
+   */
+  const handleItemChanged = useCallback(() => {
+    if (!topic) return
+    fetchItems(topic.id, debouncedSearchQuery, activeFilter, currentPage, user?.id || null)
+  }, [fetchItems, topic, debouncedSearchQuery, activeFilter, currentPage, user?.id])
+
   // Loading state
   if (loading) {
     return (
@@ -800,6 +810,7 @@ export function TopicDetailPage() {
         onAddToTodo={selectedItem ? () => handleAddToTodo(selectedItem.id) : undefined}
         onRemoveFromTodo={selectedItem ? () => handleRemoveFromTodo(selectedItem.id) : undefined}
         isAuthenticated={!!user}
+        onItemChanged={handleItemChanged}
       />
     </PageTransition>
   )

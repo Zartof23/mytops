@@ -33,6 +33,13 @@ interface ItemSearchProps {
    * parent can collapse its hero and hand the space over to the results.
    */
   onActiveChange?: (isActive: boolean) => void
+  /**
+   * Bump this to re-run the current search (same query/scope) without
+   * resetting anything the user typed — e.g. after an admin deletes or
+   * rescans an item from the detail modal, so the stale row doesn't linger
+   * in the results list.
+   */
+  refreshSignal?: number
 }
 
 /**
@@ -75,7 +82,7 @@ function rankByTitleMatch(
  * every keystroke. Owns the query and both fetches; the parent decides what a
  * selection means via `onSelectItem`.
  */
-export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
+export function ItemSearch({ onSelectItem, onActiveChange, refreshSignal }: ItemSearchProps) {
   const { user } = useAuthStore()
 
   const [topics, setTopics] = useState<Topic[]>([])
@@ -146,7 +153,7 @@ export function ItemSearch({ onSelectItem, onActiveChange }: ItemSearchProps) {
     return () => {
       cancelled = true
     }
-  }, [submittedQuery, isQueryLongEnough, activeTopicId])
+  }, [submittedQuery, isQueryLongEnough, activeTopicId, refreshSignal])
 
   // Typeahead suggestions, debounced so a fast typist fires one request rather
   // than one per keystroke. Skipped once the typed text is what was searched

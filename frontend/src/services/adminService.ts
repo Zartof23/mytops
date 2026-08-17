@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import type { Item, ItemLinks, RescanPreview } from '../types'
+import { extractEdgeFunctionErrorMessage } from './edgeFunctionError'
 
 /**
  * Admin-only item operations.
@@ -48,7 +49,10 @@ export const adminService = {
       body: { item_id: itemId }
     })
 
-    if (error) return { data: null, error: error as Error }
+    if (error) {
+      const message = await extractEdgeFunctionErrorMessage(error, error.message)
+      return { data: null, error: new Error(message) }
+    }
     if (data?.error) return { data: null, error: new Error(data.error) }
     return { data: data as RescanPreview, error: null }
   },
@@ -64,7 +68,10 @@ export const adminService = {
       body: { proposal_id: proposalId, fields }
     })
 
-    if (error) return { data: null, error: error as Error }
+    if (error) {
+      const message = await extractEdgeFunctionErrorMessage(error, error.message)
+      return { data: null, error: new Error(message) }
+    }
     if (data?.error) return { data: null, error: new Error(data.error) }
     return { data: data.item as Item, error: null }
   }

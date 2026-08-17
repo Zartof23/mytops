@@ -67,7 +67,7 @@ export function RescanDiff({ itemId, open, onOpenChange, onApplied }: RescanDiff
   }
 
   const handleApply = async () => {
-    if (!preview) return
+    if (!preview || !preview.proposal_id) return
 
     setApplying(true)
     setError(null)

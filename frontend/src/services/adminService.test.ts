@@ -109,7 +109,7 @@ describe('adminService', () => {
       expect(result.data?.id).toBe('item-1')
     })
 
-    it('surfaces an error returned in the response body', async () => {
+    it('surfaces an error returned in the response body (2xx with error field)', async () => {
       vi.mocked(supabase.functions.invoke).mockResolvedValue({
         data: { error: 'Admin privileges required' }, error: null
       } as never)
@@ -118,6 +118,35 @@ describe('adminService', () => {
 
       expect(result.error?.message).toBe('Admin privileges required')
       expect(result.data).toBeNull()
+    })
+
+    it('surfaces the real message from a non-2xx FunctionsHttpError', async () => {
+      const context = new Response(
+        JSON.stringify({ error: 'That proposal expired — re-scan and review again' }),
+        { status: 409 }
+      )
+      vi.mocked(supabase.functions.invoke).mockResolvedValue({
+        data: null,
+        error: Object.assign(new Error('Edge Function returned a non-2xx status code'), { context })
+      } as never)
+
+      const result = await adminService.previewRescan('item-1')
+
+      expect(result.data).toBeNull()
+      expect(result.error?.message).toBe('That proposal expired — re-scan and review again')
+    })
+
+    it('falls back to the generic message when the error body cannot be parsed', async () => {
+      const context = new Response('not json', { status: 500 })
+      vi.mocked(supabase.functions.invoke).mockResolvedValue({
+        data: null,
+        error: Object.assign(new Error('Edge Function returned a non-2xx status code'), { context })
+      } as never)
+
+      const result = await adminService.previewRescan('item-1')
+
+      expect(result.data).toBeNull()
+      expect(result.error?.message).toBe('Edge Function returned a non-2xx status code')
     })
   })
 })

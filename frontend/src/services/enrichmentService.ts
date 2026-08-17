@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import type { Item } from '../types'
+import { extractEdgeFunctionErrorMessage } from './edgeFunctionError'
 
 export interface EnrichmentRequest {
   topic_id: string
@@ -49,7 +50,11 @@ export const enrichmentService = {
     })
 
     if (error) {
-      throw error
+      const message = await extractEdgeFunctionErrorMessage(error, error.message)
+      if (message === 'OUT_OF_GAS') {
+        throw new OutOfGasError()
+      }
+      throw new Error(message)
     }
 
     if (data.error) {

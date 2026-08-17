@@ -96,7 +96,9 @@ export interface ItemLinks {
 }
 
 export interface RescanPreview {
-  proposal_id: string
+  // null when the scan found nothing worth changing — there is nothing to
+  // apply, so the server doesn't persist a proposal row for it.
+  proposal_id: string | null
   current: Item
   proposed: {
     name: string

@@ -218,7 +218,13 @@ Deno.serve(async (req: Request) => {
       }
 
       // Delete the proposal so it cannot be replayed.
-      await serviceClient.from('admin_rescan_proposals').delete().eq('id', proposalId);
+      const { error: deleteProposalError } = await serviceClient
+        .from('admin_rescan_proposals')
+        .delete()
+        .eq('id', proposalId);
+      if (deleteProposalError) {
+        console.error('Failed to delete consumed rescan proposal:', deleteProposalError);
+      }
 
       // Flag status is deliberately untouched — the admin resolves explicitly.
       return json({ item: updated, applied_fields: appliedFields, ...(auditFailed ? { audit_failed: true } : {}) });
@@ -265,6 +271,19 @@ Deno.serve(async (req: Request) => {
       .delete()
       .eq('item_id', itemId)
       .lt('expires_at', new Date().toISOString());
+
+    // Nothing changed: there is nothing an admin could apply, so don't
+    // store a proposal row for it.
+    if (changed.length === 0) {
+      return json({
+        proposal_id: null,
+        current: item,
+        proposed: proposedForClient,
+        changed_fields: changed,
+        confidence: proposed.confidence_score,
+        sources: proposed.sources
+      });
+    }
 
     const { data: savedProposal, error: saveError } = await serviceClient
       .from('admin_rescan_proposals')
