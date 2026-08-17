@@ -85,6 +85,16 @@ Deno.serve(async (req: Request) => {
     );
     supabaseForCleanup = supabaseClient;
 
+    // user_enrichment_requests has no UPDATE policy for authenticated users by
+    // design (an UPDATE policy would let users set their own rows to 'failed'
+    // and reset their daily rate-limit quota). Status is server-managed state,
+    // so status writes go through the service-role client instead.
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+    supabaseForCleanup = serviceClient;
+
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
       return new Response(
@@ -181,7 +191,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (!extractedData.found || extractedData.confidence_score < 0.6) {
-      await supabaseClient
+      const { error: statusError } = await serviceClient
         .from('user_enrichment_requests')
         .update({
           status: 'failed',
@@ -189,6 +199,9 @@ Deno.serve(async (req: Request) => {
           completed_at: new Date().toISOString()
         })
         .eq('id', request.id);
+      if (statusError) {
+        console.error('Failed to mark request as failed:', statusError);
+      }
       inFlightRequestId = null;
 
       return new Response(
@@ -231,7 +244,7 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) {
       console.error('Failed to insert item:', insertError);
-      await supabaseClient
+      const { error: statusError } = await serviceClient
         .from('user_enrichment_requests')
         .update({
           status: 'failed',
@@ -239,6 +252,9 @@ Deno.serve(async (req: Request) => {
           completed_at: new Date().toISOString()
         })
         .eq('id', request.id);
+      if (statusError) {
+        console.error('Failed to mark request as failed:', statusError);
+      }
       inFlightRequestId = null;
 
       return new Response(
@@ -247,7 +263,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    await supabaseClient
+    const { error: completedStatusError } = await serviceClient
       .from('user_enrichment_requests')
       .update({
         status: 'completed',
@@ -255,6 +271,9 @@ Deno.serve(async (req: Request) => {
         completed_at: new Date().toISOString()
       })
       .eq('id', request.id);
+    if (completedStatusError) {
+      console.error('Failed to mark request as completed:', completedStatusError);
+    }
     inFlightRequestId = null;
 
     return new Response(
@@ -272,7 +291,7 @@ Deno.serve(async (req: Request) => {
     // Mark the in-flight request as failed so it doesn't get stuck in "processing"
     if (inFlightRequestId && supabaseForCleanup) {
       try {
-        await supabaseForCleanup
+        const { error: cleanupStatusError } = await supabaseForCleanup
           .from('user_enrichment_requests')
           .update({
             status: 'failed',
@@ -280,6 +299,9 @@ Deno.serve(async (req: Request) => {
             completed_at: new Date().toISOString()
           })
           .eq('id', inFlightRequestId);
+        if (cleanupStatusError) {
+          console.error('Failed to mark request as failed:', cleanupStatusError);
+        }
       } catch (cleanupErr) {
         console.error('Failed to mark request as failed:', cleanupErr);
       }

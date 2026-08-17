@@ -164,6 +164,22 @@ SET LOCAL request.jwt.claims = '{"sub": "user-123"}';
 SELECT * FROM user_ratings; -- Should return only user-123's ratings
 ```
 
+### Server-managed state on user-owned tables
+
+Some columns on a user-owned table (e.g. `user_enrichment_requests.status`) are not the user's data to
+write — they are bookkeeping the server maintains on the user's behalf. Do **not** add an UPDATE policy
+granting the user write access to that column just to unblock an Edge Function. `user_enrichment_requests`
+has INSERT and SELECT policies only, by design: `check_enrichment_rate_limit` counts non-`failed` requests
+against a daily quota, and a user-facing UPDATE would let a user flip their own rows to `status = 'failed'`
+and reset it at will.
+
+The correct fix is a service-role client scoped to exactly those writes, inside the Edge Function that
+owns the state transition — never a broadened RLS policy. See `ai-enrich-item/index.ts`: the INSERT stays
+on the user-scoped client (its policy correctly enforces `auth.uid() = user_id`); every subsequent
+`status` UPDATE uses a separate service-role client, and every one of those updates checks and logs its
+`error` — an update that matches zero rows returns no error from PostgREST, so silently ignoring it is how
+this class of bug hides for months (see CHANGELOG 2026-08-17).
+
 ---
 
 ## Database Functions
