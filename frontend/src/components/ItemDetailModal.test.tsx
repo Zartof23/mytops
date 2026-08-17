@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@/test/utils'
 import userEvent from '@testing-library/user-event'
 import { ItemDetailModal } from './ItemDetailModal'
+import { useAuthStore } from '@/store/authStore'
 import type { Item, Topic } from '@/types'
 
 const mockNavigate = vi.fn()
@@ -9,6 +10,10 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return { ...actual, useNavigate: () => mockNavigate }
 })
+
+vi.mock('@/components/admin/AdminItemActions', () => ({
+  AdminItemActions: () => <div>admin actions</div>
+}))
 
 const makeItem = (id: string, name: string): Item & { topic?: Topic } => ({
   id, topic_id: 't1', name, slug: name.toLowerCase().replace(/\s+/g, '-'),
@@ -23,7 +28,10 @@ const makeItem = (id: string, name: string): Item & { topic?: Topic } => ({
 })
 
 describe('ItemDetailModal flag trigger', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useAuthStore.setState({ isAdmin: false, initialized: true, profileLoading: false })
+  })
 
   it('sends a signed-out user to login when no override is provided', async () => {
     const user = userEvent.setup()
@@ -100,5 +108,37 @@ describe('ItemDetailModal flag trigger', () => {
     )
 
     expect(screen.getByRole('button', { name: /report incorrect information/i })).toBeInTheDocument()
+  })
+})
+
+describe('ItemDetailModal admin gating', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('shows admin controls when isAdmin is true', () => {
+    useAuthStore.setState({ isAdmin: true, initialized: true, profileLoading: false })
+    render(
+      <ItemDetailModal
+        item={makeItem('i1', 'Blade Runner')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated
+      />
+    )
+
+    expect(screen.getByText('admin actions')).toBeInTheDocument()
+  })
+
+  it('hides admin controls when isAdmin is false', () => {
+    useAuthStore.setState({ isAdmin: false, initialized: true, profileLoading: false })
+    render(
+      <ItemDetailModal
+        item={makeItem('i1', 'Blade Runner')}
+        open
+        onOpenChange={vi.fn()}
+        isAuthenticated
+      />
+    )
+
+    expect(screen.queryByText('admin actions')).not.toBeInTheDocument()
   })
 })

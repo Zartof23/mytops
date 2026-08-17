@@ -6,8 +6,10 @@ import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
 import { LazyImage } from './LazyImage'
 import { FlagItemModal } from './FlagItemModal'
+import { AdminItemActions } from './admin/AdminItemActions'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getItemImageUrl } from '@/lib/itemImage'
+import { useAuthStore } from '@/store/authStore'
 import { Plus, Check, X, Bug } from 'lucide-react'
 import type { Item, Topic } from '@/types'
 
@@ -26,6 +28,7 @@ interface ItemDetailModalProps {
   isAuthenticated?: boolean
   alreadyFlagged?: boolean
   onRequireLogin?: () => void
+  onItemChanged?: () => void
 }
 
 // Topic-specific metadata field configurations
@@ -116,9 +119,11 @@ const ItemDetailModalComponent = ({
   onRemoveFromTodo,
   isAuthenticated = false,
   alreadyFlagged = false,
-  onRequireLogin
+  onRequireLogin,
+  onItemChanged
 }: ItemDetailModalProps) => {
   const navigate = useNavigate()
+  const isAdmin = useAuthStore((state) => state.isAdmin)
   const [flagOpen, setFlagOpen] = useState(false)
   const [flagged, setFlagged] = useState(alreadyFlagged)
   const flaggedItemId = useRef(item?.id)
@@ -303,6 +308,22 @@ const ItemDetailModalComponent = ({
             </Tooltip>
           </div>
         </div>
+
+        {isAdmin && (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Admin</p>
+              <AdminItemActions
+                item={item}
+                onChanged={() => {
+                  onItemChanged?.()
+                  onOpenChange(false)
+                }}
+              />
+            </div>
+          </>
+        )}
       </DialogContent>
 
       <FlagItemModal
@@ -333,6 +354,7 @@ export const ItemDetailModal = memo(ItemDetailModalComponent, (prevProps, nextPr
     prevProps.onRatingChange === nextProps.onRatingChange &&
     prevProps.onRemoveRating === nextProps.onRemoveRating &&
     prevProps.onAddToTodo === nextProps.onAddToTodo &&
-    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo
+    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo &&
+    prevProps.onItemChanged === nextProps.onItemChanged
   )
 })
