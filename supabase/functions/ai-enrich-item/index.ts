@@ -83,7 +83,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
-    supabaseForCleanup = supabaseClient;
 
     // user_enrichment_requests has no UPDATE policy for authenticated users by
     // design (an UPDATE policy would let users set their own rows to 'failed'

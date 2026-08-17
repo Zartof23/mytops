@@ -4,6 +4,17 @@ Manual checks for the SQL in `20260816181100`–`20260816202107`. No pgTAP
 setup exists in this repo; these are written so they can be lifted into
 pgTAP later without rework.
 
+**Note on `admin-rescan-item` preview:** a later migration
+(`20260816205729_create_admin_rescan_proposals.sql`, outside the range
+above) added `admin_rescan_proposals`. Preview is *not* a pure read: it
+inserts a proposal row there so apply can later write from a value the
+admin actually reviewed instead of re-extracting. The invariant that still
+holds — and that matters for this document's checks — is that preview never
+writes to `items`; `items.updated_at` is unchanged until an admin applies a
+proposal. Do not describe preview as leaving the database untouched in
+every sense; it is untouched only with respect to `items` and any table
+other than `admin_rescan_proposals`.
+
 **Every check below is safe to run verbatim, including against production.**
 Checks that exercise `admin_delete_item` create their own throwaway item
 (and throwaway rating/todo rows where needed) inside a `begin; ... rollback;`
