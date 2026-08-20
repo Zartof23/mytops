@@ -16,6 +16,57 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-17] Item Flags and Admin Tools
+
+**What**: The full item-flags-and-admin-tools branch, closed out — user-facing report flow, admin identity, hard delete, AI re-scan, and the `/admin` page.
+
+- `profiles.is_admin` (boolean, default false) plus `public.is_admin()` — a `security definer` function with `search_path = public` that reads `is_admin` for `auth.uid()`. This is now the canonical authorization check for any new admin-only policy or RPC: a `using`/`with check` clause calls `is_admin()` rather than re-deriving admin status inline. Granted by SQL only; there is no UI to promote a user, and a `with check` on the `profiles` UPDATE policy blocks a user from setting their own `is_admin`.
+- `public.item_flags` — users can INSERT and SELECT their own flags; admins can SELECT and UPDATE all flags; nobody can DELETE. A partial unique index enforces at most one *open* flag per user per item, so a user can re-flag after a prior flag is resolved but not spam duplicates. Frontend: `flagService`, `FlagItemModal`, a bug-icon trigger in `ItemDetailModal`; signed-out users are redirected to `/login` before they can open the modal.
+- `public.admin_item_links(uuid)` and `public.admin_delete_item(uuid, boolean)` — both `security definer`, both admin-gated, both revoked from `anon`. `admin_item_links` previews the rating/todo/flag counts a delete would cascade into. `admin_delete_item` hard-deletes: it re-counts links server-side under a `for update` row lock (closing the TOCTOU window between the preview call and the delete call), refuses without `force=true` when links exist, and writes an `admin_audit_log` row *before* the delete so an audit entry can never be lost to a mid-transaction failure. `DeleteItemDialog` requires the item's name to be typed back when links exist, on top of the server-side force flag.
+- **Delete is hard, not soft.** The two options considered were a hard delete and a `deleted_at` soft-delete. Soft delete was rejected for two reasons: (1) the feature's purpose is to remove bad imports (wrong item, garbled AI extraction, duplicate) from user-facing surfaces entirely, not to hide them while they keep counting against real state; (2) items carry a `UNIQUE(topic_id, slug)` constraint, and a soft-deleted row still occupies that slug — re-adding the same item (the common case right after deleting a bad duplicate) would collide on the unique index unless the slug were also mutated on delete, which is more moving parts for less benefit than just deleting the row. Cascades (`user_ratings`, `user_todo_lists` via `ON DELETE CASCADE`; `item_flags` and `admin_rescan_proposals` deleted explicitly) mean nothing is left pointing at a row that no longer exists.
+- `admin-rescan-item` Edge Function — two endpoints, preview and apply, replacing what a single-shot re-extract-and-overwrite design would have been. **Re-scan previews rather than auto-applies** because AI extraction can be wrong or drift from what's already correct in the DB (a name capitalization "fix" that isn't a fix, a stale year), and applying it unreviewed would trade one bad-data problem for another with no human in the loop. Preview stores its result as a row in `admin_rescan_proposals` (keyed to the item, with an expiry) and returns a `proposal_id`; apply loads that stored proposal by id and writes only the fields the admin selected, then deletes the proposal so it can't be replayed. **Apply reads the stored proposal instead of re-running extraction** because extraction (a Claude tool-use loop over live web search) is non-deterministic — re-extracting at apply time could silently write a different value than the one the admin reviewed and approved, which defeats the point of having a review step at all. It also doubled the Claude/Tavily cost and latency of every applied re-scan for no benefit. The one invariant this makes explicit: preview is not a pure read once `admin_rescan_proposals` exists — it writes there — but it never touches `items`, so `items.updated_at` stays put until an apply actually happens.
+- `supabase/functions/_shared/{cors,slug,images,extraction}.ts` — the extraction pipeline (Tavily search + Claude tool-use loop), image download/storage, slug generation, and CORS headers, factored out of `ai-enrich-item` so `admin-rescan-item` could reuse the same extraction logic instead of forking it. A change to either shared module affects both functions; redeploy both when editing anything under `_shared/`.
+- `/admin` page (`AdminPage`) — flag queue plus `AdminItemActions` (delete, re-scan), gated by `AdminRoute`. The same actions are also available inline in `ItemDetailModal` for admins. `AdminRoute` waits on both `initialized` (session known) and `profileLoading` (profile, and therefore `is_admin`, fetched) before deciding whether to redirect — deciding on `initialized` alone would flash-redirect an admin whose profile hadn't loaded yet. This gating is cosmetic UX only; every RPC and Edge Function re-checks `is_admin()` / the `is_admin` RPC server-side regardless of what the client believes.
+- One dead line removed from `ai-enrich-item/index.ts`: `supabaseForCleanup = supabaseClient` was immediately overwritten by the service-role client assignment a few lines later with nothing throwable in between, so it never took effect — misleading in a security-relevant spot (a reader could think the cleanup path ran user-scoped). Redeployed as version 12.
+
+**Breaking**: None. 239 tests pass across 25 files; production build succeeds.
+
+**Impact**: Backend (Database, RLS, Edge Functions), Frontend (new admin surface)
+
+**Files Changed**: `supabase/migrations/20260816181100_add_is_admin_to_profiles.sql`, `20260816182202_create_item_flags.sql`, `20260816190737_create_admin_item_functions.sql`, `20260816202107_lock_item_row_in_admin_delete.sql`, `20260816205729_create_admin_rescan_proposals.sql`, `supabase/functions/ai-enrich-item/index.ts`, `supabase/functions/admin-rescan-item/index.ts`, `supabase/functions/_shared/{cors,slug,images,extraction}.ts` (new), `frontend/src/services/flagService.ts`, `adminService.ts`, `frontend/src/components/FlagItemModal.tsx`, `AdminItemActions.tsx`, `RescanDiff.tsx`, `DeleteItemDialog.tsx`, `AdminRoute.tsx`, `frontend/src/pages/AdminPage.tsx`, `docs/admin-sql-verification.md`, `docs/context/BACKEND_CONTEXT.md`, `docs/context/FRONTEND_CONTEXT.md`, `CLAUDE.md`.
+
+---
+
+### [2026-08-17] Fix Silent Enrichment Status Writes, Harden RPC Surface
+
+**What**: Three pre-existing production defects found while investigating a row-count discrepancy during Task 7, confirmed against live data and the Supabase security advisors. Unrelated to the flagging feature, fixed at the owner's request.
+
+**Defect 1 — enrichment request status was never written.** `user_enrichment_requests` has RLS policies for INSERT and SELECT only, no UPDATE. `ai-enrich-item/index.ts` performed all status bookkeeping (`processing` → `completed`/`failed`) through the user-scoped client, so every `.update()` matched zero rows. PostgREST returns no error for an update matching nothing, and the code didn't check the result, so this failed completely silently. Live evidence: 10 rows stuck in `processing`, 12 in `failed`, zero ever reached `completed`.
+
+This was not cosmetic: `check_enrichment_rate_limit` counts `status != 'failed'` against the daily quota, because failed attempts are meant to be free. Since the `failed` write silently no-op'd, every failed enrichment permanently burned one of the user's 5 daily requests — a user whose searches kept failing could be locked out for the rest of the day by attempts that were supposed to be free.
+
+**Fix rejected**: adding a user-facing UPDATE policy would let a user set their own rows to `status = 'failed'` and reset their quota at will — a rate-limit bypass. Request status is server-managed state, not user data.
+
+**Fix applied**: `ai-enrich-item/index.ts` now constructs a service-role client and uses it for every `user_enrichment_requests` UPDATE (the two `failed` paths, the `completed` path, and the outer-catch `inFlightRequestId` cleanup). The INSERT stays on the user-scoped client — its policy correctly enforces `auth.uid() = user_id`. Every update's error is now checked and logged. No other behaviour in the function changed (extraction pipeline, rate limiting, response shapes all untouched). Deployed as version 11.
+
+The 10 historical stuck `processing` rows and 12 `failed` rows were left alone — `result_item_id` was written by the same update that silently failed, so it's null everywhere, and rewriting them would be guesswork against real user data.
+
+**Defect 2 — mutable search_path on SECURITY DEFINER functions.** Linter flagged `function_search_path_mutable` on `check_enrichment_rate_limit`, plus four others added since the earlier `fix_function_search_path` migration: `update_user_todo_lists_updated_at`, `get_items_with_stats`, `get_items_with_stats_count`, `get_user_ratings_for_items`. All five are `SECURITY DEFINER` with a caller-controlled `search_path` — the exact exploit shape that migration was written to close. Pinned with `alter function ... set search_path = public` on each (body unchanged); verified `proconfig = {search_path=public}` and re-ran each function against live data to confirm behaviour is unchanged.
+
+**Defect 3 — `anon` retained EXECUTE on the admin RPCs.** `revoke all ... from public` (Tasks 1 & 6) removed the `PUBLIC` grant but not Supabase's default explicit `anon` grant on new `public` functions. `is_admin`, `admin_item_links`, `admin_delete_item` all had `anon=X/postgres` in `proacl`. Not currently exploitable — `is_admin()` resolves `auth.uid()` to null for `anon` and fails closed — but there's no reason an unauthenticated caller should be able to invoke a hard-delete RPC. Revoked `anon` EXECUTE on all three. Re-verified via JWT impersonation: an authenticated non-admin still gets `42501 Admin privileges required` from the in-function check (not a permission error from the wrong layer), and the admin path still succeeds.
+
+**Migration**: `supabase/migrations/20260817182712_harden_rpc_surface.sql`.
+
+**Left for the owner**: the linter also reports leaked-password protection disabled (HaveIBeenPwned check). That's a Supabase Auth dashboard toggle, not code — out of scope here.
+
+**Breaking**: None. Data untouched: `items=13`, `user_ratings=5`, `user_todo_lists=8`, `user_enrichment_requests` still 10 `processing` / 12 `failed` (unchanged, by design). 239 tests pass across 25 files.
+
+**Impact**: Backend (Database, Edge Functions)
+
+**Files Changed**: `supabase/functions/ai-enrich-item/index.ts`, `supabase/migrations/20260817182712_harden_rpc_surface.sql`, `docs/context/BACKEND_CONTEXT.md`.
+
+---
+
 ### [2026-08-16] Search-First Cleanup Pass
 
 **What**: Quality pass over the search-first branch — no behaviour changes.

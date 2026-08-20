@@ -2,7 +2,7 @@ import { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import { Layout } from './components/Layout'
-import { ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards'
+import { ProtectedRoute, PublicOnlyRoute, AdminRoute } from './components/RouteGuards'
 import { HomePage } from './pages/HomePage'
 import { TopicsPage } from './pages/TopicsPage'
 import { AuthCallback } from './pages/AuthCallback'
@@ -13,6 +13,7 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const TopicDetailPage = lazy(() => import('./pages/TopicDetailPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const PublicProfilePage = lazy(() => import('./pages/PublicProfilePage'))
+const AdminPage = lazy(() => import('./pages/AdminPage'))
 
 function App() {
   const { initialize, cleanup, initialized } = useAuthStore()
@@ -82,6 +83,18 @@ function App() {
             element={
               <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>}>
                 <ProfilePage />
+              </Suspense>
+            }
+          />
+        </Route>
+
+        {/* Admin routes - UX guard only; RLS is the real boundary */}
+        <Route element={<AdminRoute />}>
+          <Route
+            path="admin"
+            element={
+              <Suspense fallback={<div className="flex justify-center py-12"><p className="text-muted-foreground">Loading...</p></div>}>
+                <AdminPage />
               </Suspense>
             }
           />

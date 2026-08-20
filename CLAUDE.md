@@ -115,8 +115,9 @@ mytops/
 - Rate items 1-5 stars, build preferables collection
 - Profile management, TODO lists
 - AI-powered item enrichment (search + add new items)
+- Item flagging (report a problem with an item) and admin moderation (flag queue, hard delete with link preview, AI re-scan with review-before-apply) at `/admin`
 - Responsive UI with dark/light mode
-- 186 tests across components, services, pages
+- 239 tests across components, services, pages
 
 ### Known Limitations
 - No personalized recommendations (MVP 3)
