@@ -50,6 +50,7 @@ supabase/.temp/
 # ========================================
 .claude/
 .mcp.json
+.superpowers/
 *.swp
 *.swo
 *~

@@ -44,6 +44,7 @@ export interface Profile {
   avatar_url: string | null
   bio: string | null
   is_public: boolean
+  is_admin: boolean
   created_at: string
   updated_at: string
 }
@@ -68,4 +69,44 @@ export interface UserTodoItem {
   // Joined data
   item?: Item & { topic?: Topic }
   topic?: Topic
+}
+
+export type FlagStatus = 'open' | 'resolved' | 'rejected'
+
+export interface ItemFlag {
+  id: string
+  item_id: string
+  user_id: string
+  reason: string
+  status: FlagStatus
+  resolution_note: string | null
+  resolved_by: string | null
+  resolved_at: string | null
+  created_at: string
+  // Joined data
+  item?: Item & { topic?: Topic }
+  reporter?: Pick<Profile, 'id' | 'username' | 'display_name'>
+}
+
+export interface ItemLinks {
+  rating_count: number
+  todo_count: number
+  flag_count: number
+  raters: string[]
+}
+
+export interface RescanPreview {
+  // null when the scan found nothing worth changing — there is nothing to
+  // apply, so the server doesn't persist a proposal row for it.
+  proposal_id: string | null
+  current: Item
+  proposed: {
+    name: string
+    description: string
+    metadata: Record<string, unknown>
+    image_url: string | null
+  }
+  changed_fields: string[]
+  confidence: number
+  sources: string[]
 }

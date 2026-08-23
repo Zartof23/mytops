@@ -25,6 +25,9 @@ export function HomePage() {
   const [userRating, setUserRating] = useState<number | null>(null)
   /** True once a search is running or has results — collapses the hero. */
   const [isSearchActive, setIsSearchActive] = useState(false)
+  // Bumped after an admin deletes or rescans the selected item, to make
+  // ItemSearch re-run its current search and drop the stale row.
+  const [searchRefreshSignal, setSearchRefreshSignal] = useState(0)
 
   // Tracks the id of the most recently requested item so async responses that
   // resolve after the user has moved on to a different item can be discarded.
@@ -86,6 +89,10 @@ export function HomePage() {
     },
     [selectedItem, userRating]
   )
+
+  const handleItemChanged = useCallback(() => {
+    setSearchRefreshSignal((n) => n + 1)
+  }, [])
 
   const scrollToFaq = useCallback(() => {
     document.getElementById(FAQ_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth' })
@@ -149,6 +156,7 @@ export function HomePage() {
             <ItemSearch
               onSelectItem={handleSelectItem}
               onActiveChange={setIsSearchActive}
+              refreshSignal={searchRefreshSignal}
             />
           </motion.div>
         </div>
@@ -165,6 +173,7 @@ export function HomePage() {
         userRating={userRating}
         onRatingChange={handleRatingChange}
         isAuthenticated={Boolean(user)}
+        onItemChanged={handleItemChanged}
       />
     </PageTransition>
   )

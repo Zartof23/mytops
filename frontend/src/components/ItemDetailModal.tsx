@@ -1,11 +1,16 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { StarRating } from './StarRating'
 import { LazyImage } from './LazyImage'
+import { FlagItemModal } from './FlagItemModal'
+import { AdminItemActions } from './admin/AdminItemActions'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getItemImageUrl } from '@/lib/itemImage'
-import { Plus, Check, X } from 'lucide-react'
+import { useAuthStore } from '@/store/authStore'
+import { Plus, Check, X, Bug } from 'lucide-react'
 import type { Item, Topic } from '@/types'
 
 interface ItemDetailModalProps {
@@ -21,6 +26,9 @@ interface ItemDetailModalProps {
   onAddToTodo?: () => void
   onRemoveFromTodo?: () => void
   isAuthenticated?: boolean
+  alreadyFlagged?: boolean
+  onRequireLogin?: () => void
+  onItemChanged?: () => void
 }
 
 // Topic-specific metadata field configurations
@@ -109,16 +117,30 @@ const ItemDetailModalComponent = ({
   isInTodo = false,
   onAddToTodo,
   onRemoveFromTodo,
-  isAuthenticated = false
+  isAuthenticated = false,
+  alreadyFlagged = false,
+  onRequireLogin,
+  onItemChanged
 }: ItemDetailModalProps) => {
-  if (!item) return null
+  const navigate = useNavigate()
+  const isAdmin = useAuthStore((state) => state.isAdmin)
+  const [flagOpen, setFlagOpen] = useState(false)
+  const [flagged, setFlagged] = useState(alreadyFlagged)
+  const flaggedItemId = useRef(item?.id)
 
-  const topicSlug = item.topic?.slug || ''
+  useEffect(() => {
+    if (flaggedItemId.current !== item?.id) {
+      flaggedItemId.current = item?.id
+      setFlagged(alreadyFlagged)
+    }
+  }, [item?.id, alreadyFlagged])
+
+  const topicSlug = item?.topic?.slug || ''
   const metadataFields = useMemo(
     () => topicMetadataConfig[topicSlug] || [],
     [topicSlug]
   )
-  const imageUrl = useMemo(() => getItemImageUrl(item), [item])
+  const imageUrl = useMemo(() => (item ? getItemImageUrl(item) : ''), [item])
 
   const handleTodoClick = useCallback(() => {
     if (isInTodo) {
@@ -127,6 +149,22 @@ const ItemDetailModalComponent = ({
       onAddToTodo?.()
     }
   }, [isInTodo, onRemoveFromTodo, onAddToTodo])
+
+  const handleFlagClick = useCallback(() => {
+    if (!isAuthenticated) {
+      // Default to the login route: no parent passes onRequireLogin, and a
+      // button that silently does nothing is worse than a redirect.
+      if (onRequireLogin) {
+        onRequireLogin()
+      } else {
+        navigate('/login')
+      }
+      return
+    }
+    setFlagOpen(true)
+  }, [isAuthenticated, onRequireLogin, navigate])
+
+  if (!item) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -244,8 +282,56 @@ const ItemDetailModalComponent = ({
               </div>
             </div>
           )}
+
+          <div className="flex justify-end">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-muted-foreground"
+                  onClick={handleFlagClick}
+                  disabled={flagged}
+                  aria-label={flagged ? 'You already reported this item' : 'Report incorrect information'}
+                >
+                  <Bug className={`h-4 w-4 ${flagged ? 'fill-current' : ''}`} />
+                  {flagged ? 'Reported' : 'Report a problem'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {flagged
+                  ? "Already in the queue. We'll get to it."
+                  : isAuthenticated
+                    ? 'Something wrong with this info?'
+                    : 'You need to log in for this. I know, I know, another login.'}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
+
+        {isAdmin && (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Admin</p>
+              <AdminItemActions
+                item={item}
+                onChanged={() => {
+                  onItemChanged?.()
+                  onOpenChange(false)
+                }}
+              />
+            </div>
+          </>
+        )}
       </DialogContent>
+
+      <FlagItemModal
+        item={item}
+        open={flagOpen}
+        onOpenChange={setFlagOpen}
+        onFlagged={() => setFlagged(true)}
+      />
     </Dialog>
   )
 }
@@ -262,10 +348,13 @@ export const ItemDetailModal = memo(ItemDetailModalComponent, (prevProps, nextPr
     prevProps.userRating === nextProps.userRating &&
     prevProps.isInTodo === nextProps.isInTodo &&
     prevProps.isAuthenticated === nextProps.isAuthenticated &&
+    prevProps.alreadyFlagged === nextProps.alreadyFlagged &&
+    prevProps.onRequireLogin === nextProps.onRequireLogin &&
     prevProps.onOpenChange === nextProps.onOpenChange &&
     prevProps.onRatingChange === nextProps.onRatingChange &&
     prevProps.onRemoveRating === nextProps.onRemoveRating &&
     prevProps.onAddToTodo === nextProps.onAddToTodo &&
-    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo
+    prevProps.onRemoveFromTodo === nextProps.onRemoveFromTodo &&
+    prevProps.onItemChanged === nextProps.onItemChanged
   )
 })

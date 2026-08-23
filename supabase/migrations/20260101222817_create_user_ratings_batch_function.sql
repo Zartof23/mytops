@@ -1,6 +1,7 @@
+-- Recovered from the remote migration history on 2026-08-16.
+-- Already applied in production; do not re-apply remotely.
+
 -- Migration: Create get_user_ratings_for_items function for batch fetching
--- This function allows fetching user ratings for multiple items in a single query,
--- optimizing the search results page to avoid N+1 queries
 
 CREATE OR REPLACE FUNCTION public.get_user_ratings_for_items(
     p_user_id UUID,
@@ -19,8 +20,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant execute permission to authenticated users only
 GRANT EXECUTE ON FUNCTION public.get_user_ratings_for_items TO authenticated;
 
--- Add comment for documentation
-COMMENT ON FUNCTION public.get_user_ratings_for_items IS 'Batch fetch user ratings for multiple items to avoid N+1 queries';
+COMMENT ON FUNCTION public.get_user_ratings_for_items IS 'Batch fetch user ratings for multiple items to avoid N+1 queries';;

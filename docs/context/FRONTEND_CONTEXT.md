@@ -12,6 +12,10 @@ frontend/src/
 │   ├── ui/              # shadcn/ui primitives (Button, Card, Input, etc.)
 │   ├── Layout.tsx       # Main layout (header, nav, footer)
 │   ├── ItemCard.tsx     # Item display with rating
+│   ├── ItemPosterCard.tsx  # Poster card (image + name + footer/action slots); profile Top Rated & Watch Later
+│   ├── profile/
+│   │   ├── TodoSection.tsx  # Watch Later: topic filter pills + poster grid
+│   │   └── RatingRow.tsx    # One rated item as a compact row with thumbnail
 │   ├── StarRating.tsx   # 5-star rating component
 │   ├── LazyImage.tsx    # Optimized lazy-loading images
 │   ├── EnrichmentPrompt.tsx  # AI enrichment UI
@@ -169,6 +173,8 @@ interface AuthState {
   user: User | null
   session: Session | null
   initialized: boolean
+  isAdmin: boolean
+  profileLoading: boolean
   setAuth: (user: User | null, session: Session | null) => void
 }
 
@@ -176,9 +182,38 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   session: null,
   initialized: false,
+  isAdmin: false,
+  profileLoading: false,
   setAuth: (user, session) => set({ user, session, initialized: true })
 }))
 ```
+
+### `isAdmin` and `profileLoading`
+
+`useAuthStore().isAdmin` mirrors `profiles.is_admin` for the current user and is populated by a separate
+profile fetch, not by `setAuth` — session and profile arrive on different timelines. `profileLoading`
+tracks that fetch. `initialized` alone (session known) is not enough to decide admin UI: check both
+`initialized` and `!profileLoading` before branching on `isAdmin`, or an admin whose profile hasn't loaded
+yet gets treated as a non-admin for a frame (and, in a route guard, redirected away from a page they're
+allowed to see).
+
+### `AdminRoute`
+
+```typescript
+// Redirects to / unless the user is signed in, initialized, and isAdmin —
+// but only after profileLoading has settled, same rule as above.
+<Route element={<AdminRoute />}>
+  <Route path="/admin" element={<AdminPage />} />
+</Route>
+```
+
+**Admin UI gating is cosmetic, not the security boundary.** `AdminRoute`, `isAdmin`-conditioned buttons in
+`ItemDetailModal`, and any other client-side admin check exist to keep the UI honest for a legitimate
+admin — they hide controls a non-admin shouldn't see, nothing more. They do not, and must not be relied on
+to, prevent a non-admin from calling an admin RPC or Edge Function directly: every one of those re-checks
+`is_admin()` (RPCs) or the `is_admin` RPC (Edge Functions) server-side and fails closed with `42501`/`403`
+regardless of what the client sent or believed. Never skip the server-side check because "the button is
+already hidden."
 
 ### Local State (Component)
 
@@ -470,6 +505,23 @@ import { SEO, WebsiteSchema } from '@/components/SEO'
   stats={{ avgRating: 4.2, ratingCount: 15 }}
 />
 ```
+
+### ItemPosterCard
+
+```typescript
+<ItemPosterCard
+  item={item}
+  topic={topic}              // emoji fallback when the item has no image
+  onClick={() => openModal(item)}  // omit to render a non-interactive card
+  footer={<StarRating value={5} readOnly size="sm" />}
+  action={<button aria-label="Remove ...">×</button>}  // overlay, top-right
+/>
+```
+
+Image source is `getItemImageUrl` (`lib/itemImage.ts`): `image_url` → `metadata.poster_url`
+→ `metadata.image`. Every surface that renders item imagery must go through that helper rather
+than reading `image_url` directly, or items enriched from a source that only filled metadata
+render blank.
 
 ### LazyImage
 
