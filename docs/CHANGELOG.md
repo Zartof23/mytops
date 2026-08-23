@@ -16,6 +16,31 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-23] Profile Page Restructure
+
+**What**: Reworked `/profile` from a flat stack of emoji-only mini-cards into a structured page with real item imagery and topic-based navigation of the TODO list.
+
+- **`ItemPosterCard`** (new, `components/ItemPosterCard.tsx`) — poster-style card: image on top via `getItemImageUrl` + `LazyImage`, name underneath, optional `footer` and top-right `action` slots. Used by both Top Rated and Watch Later so the two surfaces are visually identical instead of each hand-rolling a card body inside `ProfilePage`. Falls back to the topic emoji when enrichment never found an image, which is still the common case for freshly added items.
+- **`TodoSection`** (new, `components/profile/TodoSection.tsx`) — Watch Later as topic filter pills (`All 12` / `🎬 Movies 4` / …) over a poster grid, replacing the single flat horizontal strip. It consumes the topic-grouped `Map` that `todoService.getAllTodos()` already returned; `ProfilePage` previously flattened that grouping away with `flatMap` and threw the topic structure out. Filtering is now a group lookup rather than a re-scan. A topic whose last item is removed drops out of the pill row, and the view falls back to `All` rather than showing an empty grid.
+- **`RatingRow`** (new, `components/profile/RatingRow.tsx`) — one rated item as a compact row with a thumbnail, name, note, and stars. **Deliberately not a poster grid**: a user with hundreds of ratings needs a scannable list, and poster cards would truncate notes and make the tab content very tall. Imagery was the goal, not uniformity of card shape.
+- **Topic stats are now navigation.** The per-topic count tiles were decorative; each is now a `button` that selects that topic's ratings tab and scrolls the ratings section into view (`behavior: 'auto'` under `prefers-reduced-motion`). Header details (join date, total ratings) moved inside a bordered `Card` with a separator so the page opens with a defined block instead of floating text.
+- `setActiveTab` in the fetch effect became a functional update. The old code read `activeTab` while omitting it from the dep array; with the stats tiles now able to set a tab before the fetch resolves, the functional form keeps the user's choice instead of overwriting it with the default topic.
+
+**Why**: The page was plain — every card was an emoji on a blank background even though items already carry images — and the TODO list had no way to navigate by topic despite the data arriving grouped by topic.
+
+**Impact**: Frontend only. No schema, RLS, service, route, or Edge Function changes; no new dependencies. Test count 239 → 261 (22 new across the three components). Optimistic-remove behaviour and its rollback are unchanged, just applied to the grouped shape.
+
+**Files Changed**:
+- `frontend/src/components/ItemPosterCard.tsx` (new) + `.test.tsx`
+- `frontend/src/components/profile/TodoSection.tsx` (new) + `.test.tsx`
+- `frontend/src/components/profile/RatingRow.tsx` (new)
+- `frontend/src/pages/ProfilePage.tsx`
+- `frontend/src/pages/ProfilePage.test.tsx` (new — the page had no test coverage before)
+- `docs/context/FRONTEND_CONTEXT.md`, `CLAUDE.md`
+
+---
+
+
 ### [2026-08-17] Item Flags and Admin Tools
 
 **What**: The full item-flags-and-admin-tools branch, closed out — user-facing report flow, admin identity, hard delete, AI re-scan, and the `/admin` page.

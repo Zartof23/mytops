@@ -113,11 +113,11 @@ mytops/
 - Authentication (Email + Google + GitHub OAuth)
 - Cross-topic search from the home page (Movies, Series, Books, Anime, Games, Restaurants), with `/topics` browse kept as a secondary path
 - Rate items 1-5 stars, build preferables collection
-- Profile management, TODO lists
+- Profile page: poster-image cards, topic-filtered Watch Later, topic stats that jump to that topic's ratings
 - AI-powered item enrichment (search + add new items)
 - Item flagging (report a problem with an item) and admin moderation (flag queue, hard delete with link preview, AI re-scan with review-before-apply) at `/admin`
 - Responsive UI with dark/light mode
-- 239 tests across components, services, pages
+- 261 tests across components, services, pages
 
 ### Known Limitations
 - No personalized recommendations (MVP 3)

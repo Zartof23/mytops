@@ -12,6 +12,10 @@ frontend/src/
 │   ├── ui/              # shadcn/ui primitives (Button, Card, Input, etc.)
 │   ├── Layout.tsx       # Main layout (header, nav, footer)
 │   ├── ItemCard.tsx     # Item display with rating
+│   ├── ItemPosterCard.tsx  # Poster card (image + name + footer/action slots); profile Top Rated & Watch Later
+│   ├── profile/
+│   │   ├── TodoSection.tsx  # Watch Later: topic filter pills + poster grid
+│   │   └── RatingRow.tsx    # One rated item as a compact row with thumbnail
 │   ├── StarRating.tsx   # 5-star rating component
 │   ├── LazyImage.tsx    # Optimized lazy-loading images
 │   ├── EnrichmentPrompt.tsx  # AI enrichment UI
@@ -501,6 +505,23 @@ import { SEO, WebsiteSchema } from '@/components/SEO'
   stats={{ avgRating: 4.2, ratingCount: 15 }}
 />
 ```
+
+### ItemPosterCard
+
+```typescript
+<ItemPosterCard
+  item={item}
+  topic={topic}              // emoji fallback when the item has no image
+  onClick={() => openModal(item)}  // omit to render a non-interactive card
+  footer={<StarRating value={5} readOnly size="sm" />}
+  action={<button aria-label="Remove ...">×</button>}  // overlay, top-right
+/>
+```
+
+Image source is `getItemImageUrl` (`lib/itemImage.ts`): `image_url` → `metadata.poster_url`
+→ `metadata.image`. Every surface that renders item imagery must go through that helper rather
+than reading `image_url` directly, or items enriched from a source that only filled metadata
+render blank.
 
 ### LazyImage
 

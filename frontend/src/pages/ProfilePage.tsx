@@ -1,10 +1,9 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
 import { supabase } from '../lib/supabase'
 import { profileService } from '../services/profileService'
 import { todoService } from '../services/todoService'
-import { StarRating } from '../components/StarRating'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -12,11 +11,15 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { SEO } from '@/components/SEO'
 import { PageTransition, StaggerContainer, StaggerItem, FadeIn } from '@/components/PageTransition'
-import { Share2, Star, Calendar, Bookmark, X } from 'lucide-react'
+import { ItemPosterCard } from '@/components/ItemPosterCard'
+import { TodoSection, type TodoGroup } from '@/components/profile/TodoSection'
+import { RatingRow } from '@/components/profile/RatingRow'
+import { Share2, Star, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Item, Topic, Profile, UserTodoItem } from '@/types'
+import type { Item, Topic, Profile } from '@/types'
 
 interface RatingWithItem {
   id: string
@@ -93,9 +96,10 @@ export function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [ratingsByTopic, setRatingsByTopic] = useState<RatingsByTopic[]>([])
   const [topRated, setTopRated] = useState<RatingWithItem[]>([])
-  const [todos, setTodos] = useState<UserTodoItem[]>([])
+  const [todoGroups, setTodoGroups] = useState<TodoGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('')
+  const ratingsRef = useRef<HTMLDivElement>(null)
 
   // Calculate total ratings
   const totalRatings = useMemo(
@@ -145,9 +149,9 @@ export function ProfilePage() {
           setProfile(profileResult.data)
         }
 
-        // Set TODO list (flatten grouped map)
+        // Keep the TODO list grouped by topic - the filter pills navigate it
         if (todosResult.data) {
-          setTodos(Array.from(todosResult.data.values()).flatMap(({ items }) => items))
+          setTodoGroups(Array.from(todosResult.data.values()))
         }
 
         // Handle ratings
@@ -194,9 +198,10 @@ export function ProfilePage() {
 
         setRatingsByTopic(groupedArray)
 
-        // Set first topic as active tab (only if not already set)
-        if (groupedArray.length > 0 && !activeTab) {
-          setActiveTab(groupedArray[0].topic.id)
+        // Set first topic as active tab (functional update keeps a user's
+        // choice if they clicked a stat before the fetch resolved)
+        if (groupedArray.length > 0) {
+          setActiveTab((current) => current || groupedArray[0].topic.id)
         }
 
         setLoading(false)
@@ -216,17 +221,34 @@ export function ProfilePage() {
   }, [user])
 
   const handleRemoveTodo = useCallback(async (itemId: string) => {
-    const previous = todos
-    setTodos((prev) => prev.filter((todo) => todo.item_id !== itemId))
+    let previous: TodoGroup[] = []
+    setTodoGroups((prev) => {
+      previous = prev
+      return prev
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((todo) => todo.item_id !== itemId)
+        }))
+        .filter((group) => group.items.length > 0)
+    })
 
     const { error } = await todoService.removeFromTodo(itemId)
     if (error) {
-      setTodos(previous)
+      setTodoGroups(previous)
       toast.error("Couldn't remove from list.")
     } else {
       toast.success('Removed from your list.')
     }
-  }, [todos])
+  }, [])
+
+  // Jump from a topic stat down to that topic's ratings
+  const handleTopicStatClick = useCallback((topicId: string) => {
+    setActiveTab(topicId)
+    ratingsRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start'
+    })
+  }, [prefersReducedMotion])
 
   const handleShare = useCallback(async () => {
     if (!profile?.username) {
@@ -276,27 +298,38 @@ export function ProfilePage() {
       <div className="max-w-4xl mx-auto">
         {/* Profile Header */}
         <motion.div
-          className="flex items-start gap-4 mb-8"
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
+          className="mb-6"
         >
-          <Avatar className="h-16 w-16">
-            <AvatarFallback className="text-lg">{initials}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold truncate">
-              {profile?.display_name || user?.email?.split('@')[0] || 'Anonymous'}
-            </h1>
-            {profile?.username && (
-              <p className="text-sm text-muted-foreground">@{profile.username}</p>
-            )}
-            {profile?.bio && (
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {profile.bio}
-              </p>
-            )}
-            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+          <Card className="p-4">
+            <div className="flex items-start gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarFallback className="text-lg">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl font-bold truncate">
+                  {profile?.display_name || user?.email?.split('@')[0] || 'Anonymous'}
+                </h1>
+                {profile?.username && (
+                  <p className="text-sm text-muted-foreground">@{profile.username}</p>
+                )}
+                {profile?.bio && (
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    {profile.bio}
+                  </p>
+                )}
+              </div>
+              <Button variant="outline" size="sm" onClick={handleShare}>
+                <Share2 className="h-4 w-4 mr-1" />
+                Share
+              </Button>
+            </div>
+
+            <Separator className="my-3" />
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
                 Joined {joinDate}
@@ -306,26 +339,28 @@ export function ProfilePage() {
                 {totalRatings} ratings
               </span>
             </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleShare}>
-            <Share2 className="h-4 w-4 mr-1" />
-            Share
-          </Button>
+          </Card>
         </motion.div>
 
-        {/* Stats Grid */}
+        {/* Stats Grid - each topic jumps to its ratings tab */}
         {ratingsByTopic.length > 0 && (
           <FadeIn delay={0.1}>
             <Card className="p-4 mb-8">
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-center">
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {ratingsByTopic.slice(0, 6).map(({ topic, ratings }) => (
-                  <div key={topic.id}>
-                    <span className="text-xl">{topic.icon}</span>
+                  <button
+                    key={topic.id}
+                    type="button"
+                    onClick={() => handleTopicStatClick(topic.id)}
+                    aria-label={`Show your ${ratings.length} ${topic.name} ratings`}
+                    className="rounded-md p-2 text-center transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <span className="text-xl" aria-hidden="true">{topic.icon}</span>
                     <p className="text-lg font-bold">
                       <CountUp value={ratings.length} />
                     </p>
-                    <p className="text-xs text-muted-foreground">{topic.name}</p>
-                  </div>
+                    <p className="text-xs text-muted-foreground truncate">{topic.name}</p>
+                  </button>
                 ))}
               </div>
             </Card>
@@ -335,140 +370,107 @@ export function ProfilePage() {
         {/* Top Rated Section */}
         {topRated.length > 0 && (
           <FadeIn delay={0.2}>
-            <div className="mb-8">
-              <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
+            <section className="mb-8" aria-labelledby="top-rated-heading">
+              <h2
+                id="top-rated-heading"
+                className="text-sm font-medium mb-3 flex items-center gap-2"
+              >
                 <Star className="h-4 w-4 fill-foreground" />
                 Top Rated
                 <Badge variant="secondary" className="text-xs">
                   {topRated.length}
                 </Badge>
               </h2>
-              <ScrollArea className="w-full whitespace-nowrap">
+              <ScrollArea className="w-full">
                 <div className="flex gap-3 pb-4">
                   {topRated.map((rating) => (
-                    <Card
+                    <ItemPosterCard
                       key={rating.id}
-                      className="inline-flex flex-col items-center p-4 min-w-[120px]"
-                    >
-                      <span className="text-lg mb-1">
-                        {rating.item.topic?.icon || '📦'}
-                      </span>
-                      <p className="text-xs font-medium text-center truncate max-w-[100px]">
-                        {rating.item.name}
-                      </p>
-                      <div className="flex gap-0.5 mt-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star
-                            key={star}
-                            className="h-3 w-3 fill-foreground text-foreground"
-                          />
-                        ))}
-                      </div>
-                    </Card>
+                      item={rating.item}
+                      topic={rating.item.topic}
+                      className="w-[120px] shrink-0"
+                      footer={
+                        <div className="flex gap-0.5" aria-label="Rated 5 out of 5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className="h-3 w-3 fill-foreground text-foreground"
+                              aria-hidden="true"
+                            />
+                          ))}
+                        </div>
+                      }
+                    />
                   ))}
                 </div>
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
-            </div>
+            </section>
           </FadeIn>
         )}
 
-        {/* Watch Later / Pinned Items */}
-        {todos.length > 0 && (
-          <FadeIn delay={0.25}>
-            <div className="mb-8">
+        {/* Watch Later - topic pills + poster grid */}
+        <FadeIn delay={0.25}>
+          <TodoSection groups={todoGroups} onRemove={handleRemoveTodo} />
+        </FadeIn>
+
+        {/* Ratings by topic */}
+        <div ref={ratingsRef} className="scroll-mt-4">
+          {ratingsByTopic.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-muted-foreground mb-2">
+                You haven't rated anything yet.
+              </p>
+              <p className="text-xs text-muted-foreground italic">
+                Go find something you love and give it some stars.
+              </p>
+            </Card>
+          ) : (
+            <FadeIn delay={0.3}>
               <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
-                <Bookmark className="h-4 w-4" />
-                Watch Later
+                <Star className="h-4 w-4" />
+                Your Ratings
                 <Badge variant="secondary" className="text-xs">
-                  {todos.length}
+                  {totalRatings}
                 </Badge>
               </h2>
-              <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex gap-3 pb-4">
-                  {todos.map((todo) => (
-                    <Card
-                      key={todo.id}
-                      className="relative inline-flex flex-col items-center p-4 min-w-[120px]"
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="mb-4 flex-wrap h-auto gap-1 bg-transparent p-0">
+                  {ratingsByTopic.map(({ topic, ratings }) => (
+                    <TabsTrigger
+                      key={topic.id}
+                      value={topic.id}
+                      className="data-[state=active]:bg-accent"
                     >
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTodo(todo.item_id)}
-                        className="absolute top-1 right-1 p-1 rounded-full hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-                        aria-label={`Remove ${todo.item?.name || 'item'} from watch later`}
-                      >
-                        <X className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                      <span className="text-lg mb-1">
-                        {todo.topic?.icon || '📦'}
-                      </span>
-                      <p className="text-xs font-medium text-center truncate max-w-[100px]">
-                        {todo.item?.name}
-                      </p>
-                    </Card>
+                      <span className="mr-1" aria-hidden="true">{topic.icon}</span>
+                      {topic.name}
+                      <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">
+                        {ratings.length}
+                      </Badge>
+                    </TabsTrigger>
                   ))}
-                </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
-            </div>
-          </FadeIn>
-        )}
+                </TabsList>
 
-        {/* Tabbed Content */}
-        {ratingsByTopic.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground mb-2">
-              You haven't rated anything yet.
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              Go find something you love and give it some stars.
-            </p>
-          </Card>
-        ) : (
-          <FadeIn delay={0.3}>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="mb-4 flex-wrap h-auto gap-1 bg-transparent p-0">
                 {ratingsByTopic.map(({ topic, ratings }) => (
-                  <TabsTrigger
-                    key={topic.id}
-                    value={topic.id}
-                    className="data-[state=active]:bg-accent"
-                  >
-                    <span className="mr-1">{topic.icon}</span>
-                    {topic.name}
-                    <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">
-                      {ratings.length}
-                    </Badge>
-                  </TabsTrigger>
+                  <TabsContent key={topic.id} value={topic.id}>
+                    <StaggerContainer className="space-y-2">
+                      {ratings.map((rating) => (
+                        <StaggerItem key={rating.id}>
+                          <RatingRow
+                            item={rating.item}
+                            topic={topic}
+                            rating={rating.rating}
+                            notes={rating.notes}
+                          />
+                        </StaggerItem>
+                      ))}
+                    </StaggerContainer>
+                  </TabsContent>
                 ))}
-              </TabsList>
-
-              {ratingsByTopic.map(({ topic, ratings }) => (
-                <TabsContent key={topic.id} value={topic.id}>
-                  <StaggerContainer className="space-y-2">
-                    {ratings.map((rating) => (
-                      <StaggerItem key={rating.id}>
-                        <Card className="flex items-center justify-between p-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate">
-                              {rating.item?.name}
-                            </p>
-                            {rating.notes && (
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                {rating.notes}
-                              </p>
-                            )}
-                          </div>
-                          <StarRating value={rating.rating} readOnly size="sm" />
-                        </Card>
-                      </StaggerItem>
-                    ))}
-                  </StaggerContainer>
-                </TabsContent>
-              ))}
-            </Tabs>
-          </FadeIn>
-        )}
+              </Tabs>
+            </FadeIn>
+          )}
+        </div>
       </div>
     </PageTransition>
   )
