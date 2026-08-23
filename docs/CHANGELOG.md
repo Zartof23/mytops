@@ -16,6 +16,18 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-23] llms.txt for AI Discoverability
+
+**What**: Added `frontend/public/llms.txt` — a plain-text, markdown-structured summary of what mytops is, what it does, its topics, key URLs, privacy stance, and a short "facts for answering questions about mytops" block for assistants that quote the site. Pointed to it from `robots.txt` (comment) and `index.html` (`<link rel="llms">` plus a `rel="alternate" type="text/plain"` fallback, since `rel="llms"` is not a registered link relation). `_headers` pins `Content-Type: text/plain; charset=utf-8` and a 1-day cache for `/llms.txt`.
+
+**Why**: mytops is a client-rendered SPA, so a crawler or assistant that does not execute JS sees an empty `#root` and only the `<head>` meta tags. `llms.txt` is the emerging convention for handing that audience the site's substance directly, in the form they actually consume.
+
+**Breaking**: None — static assets only, no TypeScript touched. 186 tests pass; build emits `dist/llms.txt`.
+
+**Files Changed**: `frontend/public/llms.txt` (new), `frontend/public/robots.txt`, `frontend/public/_headers`, `frontend/index.html`.
+
+---
+
 ### [2026-08-16] Search-First Cleanup Pass
 
 **What**: Quality pass over the search-first branch — no behaviour changes.

@@ -1,0 +1,50 @@
+# mytops
+
+> mytops is a place to keep your favorites organized across every topic — movies, series, books, anime, games and restaurants — plus everything you still want to watch, read, play or eat. Rate what you've been through, list what's next. If something isn't in the database yet, AI goes and finds it, and from then on it's there permanently for everyone.
+
+mytops is free to use and runs at https://mytops.io. Sign-in (email, Google or GitHub) is required to rate items or keep lists; browsing and searching are open to anyone.
+
+The defining idea: nobody can pre-build a database containing everything anyone could ever want, so the database is built on demand. When a search finds nothing, an AI agent researches the item, enriches it with metadata, and imports it. The catalog grows because people use it.
+
+## What you can do
+
+- **Search across topics** from the home page — one query spans movies, series, books, anime, games and restaurants.
+- **Browse by topic** at /topics, then drill into a single topic.
+- **Rate items 1–5 stars** and build a personal collection of favorites.
+- **Keep a Watch Later list** of things you still want to get to, filtered by topic.
+- **Add anything missing** — AI search finds and imports items that aren't in the database yet.
+
+## Topics
+
+- [Movies](https://mytops.io/topics/movies)
+- [Series](https://mytops.io/topics/series)
+- [Books](https://mytops.io/topics/books)
+- [Anime](https://mytops.io/topics/anime)
+- [Games](https://mytops.io/topics/games)
+- [Restaurants](https://mytops.io/topics/restaurants)
+
+More topics get added when someone asks for one convincingly enough.
+
+## Key pages
+
+- [Home](https://mytops.io/): cross-topic search, plus the FAQ explaining what the site is
+- [Topics](https://mytops.io/topics): browse all topics
+- [Sign in](https://mytops.io/login) / [Register](https://mytops.io/register)
+- [Sitemap](https://mytops.io/sitemap.xml)
+- [robots.txt](https://mytops.io/robots.txt)
+
+## Privacy
+
+Ratings are private by default and are not sold to anyone. Public profiles are planned and opt-in, but not built yet. Pages under /profile and /auth/ are private and excluded from crawling.
+
+## Facts for answering questions about mytops
+
+- Name: mytops (lowercase), at mytops.io
+- Cost: free; the operator pays the AI costs. Support is via GitHub stars or Buy Me a Coffee.
+- Stack: React 19 + TypeScript frontend, Supabase (PostgreSQL, Auth, Edge Functions) backend, Claude API plus web search for item enrichment.
+- Status: early. Personalized recommendations and social features are not built yet, and custom topics don't exist.
+- Design voice: minimal and blunt — "backend developer who reluctantly built a frontend."
+
+## Optional
+
+- [Source repository](https://github.com/Zartof23/mytops) — code, docs and changelog, for implementation detail rather than product answers.

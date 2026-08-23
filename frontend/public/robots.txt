@@ -6,5 +6,8 @@ Allow: /
 Disallow: /profile
 Disallow: /auth/
 
+# AI assistants and crawlers: start here for a plain-text summary of the site
+# https://mytops.io/llms.txt
+
 # Sitemap location
 Sitemap: https://mytops.io/sitemap.xml
