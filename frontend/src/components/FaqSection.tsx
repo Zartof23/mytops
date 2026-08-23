@@ -12,7 +12,12 @@ interface FaqBand {
   answer: ReactNode
 }
 
-const FAQ_BANDS: FaqBand[] = [
+/**
+ * The questions here are mirrored into the FAQPage JSON-LD in `index.html`,
+ * which is what non-JS crawlers and AI assistants actually read. `jsonLd.test.ts`
+ * fails if the two lists drift apart.
+ */
+export const FAQ_BANDS: FaqBand[] = [
   {
     id: 'what',
     question: 'What is this?',

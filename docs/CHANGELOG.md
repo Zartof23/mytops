@@ -16,6 +16,22 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-23] JSON-LD Structured Data
+
+**What**: Added a single `application/ld+json` block to `index.html` with an `@graph` of three nodes: `WebSite`, `WebApplication` (free, feature list, cross-linked via `@id`), and `FAQPage` carrying all five home-page FAQ questions and answers. `FAQ_BANDS` is now exported from `FaqSection.tsx`, and `src/jsonLd.test.ts` asserts the block parses, declares both site types, and lists the same questions in the same order as the rendered FAQ.
+
+**Why**: Same problem `llms.txt` addresses, different audience. Google's AI surfaces and most social/answer engines read structured data, not plain text. The FAQ is the highest-value part — those are the exact questions someone would ask an assistant about mytops, so answering them in machine-readable form beats letting the model guess.
+
+**No SearchAction**: `WebSite.potentialAction` was deliberately left out. Search state lives in `HomePage` component state and there is no `?q=` route, so a declared search endpoint would 404 on the behaviour it promises. Worth adding if search ever becomes URL-driven.
+
+**Drift guard**: The FAQ text exists in two places now, which is exactly the kind of duplication that rots. `jsonLd.test.ts` was verified to fail — not just pass — by mutating a question in `index.html` and confirming the order-sensitive assertion caught it.
+
+**Breaking**: None. 190 tests pass (186 + 4 new); build succeeds.
+
+**Files Changed**: `frontend/index.html`, `frontend/src/jsonLd.test.ts` (new), `frontend/src/components/FaqSection.tsx`.
+
+---
+
 ### [2026-08-23] llms.txt for AI Discoverability
 
 **What**: Added `frontend/public/llms.txt` — a plain-text, markdown-structured summary of what mytops is, what it does, its topics, key URLs, privacy stance, and a short "facts for answering questions about mytops" block for assistants that quote the site. Pointed to it from `robots.txt` (comment) and `index.html` (`<link rel="llms">` plus a `rel="alternate" type="text/plain"` fallback, since `rel="llms"` is not a registered link relation). `_headers` pins `Content-Type: text/plain; charset=utf-8` and a 1-day cache for `/llms.txt`.
