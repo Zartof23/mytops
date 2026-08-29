@@ -17,13 +17,15 @@
 9. [Supabase-Specific Patterns](#supabase-specific-patterns)
 10. [Accessibility Requirements](#accessibility-requirements)
 11. [Dependencies](#dependencies)
-12. [Commit & Change Management](#commit--change-management)
+12. [Issue Tracking (Linear)](#issue-tracking-linear)
+13. [Commit & Change Management](#commit--change-management)
 
 ---
 
 ## Pre-Task Checklist (ALWAYS DO FIRST)
 
 Before starting ANY task:
+- [ ] Confirm a Linear ticket exists for the work (create one if not) and move it to `In Progress`
 - [ ] Read and understand the relevant sections of this document
 - [ ] Review Security Standards for potential hazards
 - [ ] Check existing patterns in the codebase
@@ -36,9 +38,10 @@ Before starting ANY task:
 After completing ANY task:
 - [ ] Run tests: `npm run test:run`
 - [ ] Run build: `npm run build`
-- [ ] Update CHANGELOG.md with what changed and why
+- [ ] Update CHANGELOG.md with what changed and why (reference the Linear ticket ID)
 - [ ] Update documentation if architecture/patterns changed
 - [ ] Review for security implications
+- [ ] Move the Linear ticket to `In Review` (or `Done` once verified in production)
 
 ---
 
@@ -574,17 +577,77 @@ Security: npm audit clean, actively maintained
 
 ---
 
+## Issue Tracking (Linear)
+
+**Linear is the official tracker for bugs and new features.** GitHub issues, TODO comments and chat threads are not a substitute.
+
+### Where
+
+| | |
+|---|---|
+| Workspace / team | `ZartofApp` (key `ZAR`) |
+| Project | [mytops.io](https://linear.app/zartofapp/project/mytopsio-cee0479c3109/overview) |
+| Labels | `Bug`, `Feature`, `Improvement` |
+| Statuses | `Backlog` → `Todo` → `In Progress` → `In Review` → `Done` (+ `Canceled`, `Duplicate`) |
+
+### When to create a ticket
+
+- **Bug**: the user reports something broken, or a defect is discovered during work. Create it immediately, even if it will be fixed right away.
+- **Feature / Improvement**: any new capability or change in behaviour. Create the ticket at refinement time, before implementation starts.
+
+### What goes in a ticket
+
+Every ticket must be self-contained — a reader should not need the chat history.
+
+**Bug tickets:**
+- Summary of the broken behaviour
+- Steps to reproduce (topic, item, page, action)
+- Expected vs actual behaviour
+- Suspected cause / affected area if known
+
+**Feature tickets:**
+- Problem / motivation
+- Proposed behaviour (UX described concretely)
+- Acceptance criteria as a checklist
+- Technical notes (affected components, Edge Functions, tables, migrations)
+- Security considerations (RLS, authz, input validation, rate limiting)
+- Open questions
+
+Refinement happens **in the ticket**. When a discussion changes scope, update the description rather than leaving the decision only in conversation.
+
+### Status discipline (mandatory)
+
+Whenever a piece of work is taken from the project board, the ticket status **must** be updated to match reality:
+
+| Moment | Status |
+|---|---|
+| Work picked up / implementation begins | `In Progress` |
+| Implementation complete, awaiting review or user verification | `In Review` |
+| Verified and merged/deployed | `Done` |
+| Abandoned or superseded | `Canceled` (comment why) |
+| Same as an existing ticket | `Duplicate` (link the original) |
+
+Add a comment on the ticket when something meaningful happens: a blocker, a scope change, a decision made, or a link to the commit/PR.
+
+### Cross-referencing
+
+- Commit messages and PR titles start with the ticket ID: `ZAR-12: cache GitHub stars API call`
+- CHANGELOG.md entries reference the ticket ID
+- If work spans multiple tickets, reference all of them
+
+---
+
 ## Commit & Change Management
 
 ### Commit Messages
 
 - Clear and descriptive
 - Reference what changed and why
-- Use conventional commits format (will be standardized when Linear integration is added)
+- Prefix with the Linear ticket ID (e.g. `ZAR-12: ...`)
 
 **Good:**
 ```
-Add dark mode toggle to header
+ZAR-42: Add dark mode toggle to header
 
 Users can now switch between light/dark themes via toggle in header.
 Respects system preference on initial load.
@@ -599,6 +662,7 @@ Update header
 
 For significant changes:
 
+0. **Create/refine the Linear ticket** — it is the record of the change request
 1. **Document the proposed change**
    - What needs to change and why
    - Alternatives considered
@@ -663,6 +727,7 @@ For significant changes:
 
 Before submitting any code:
 
+- [ ] Linear ticket exists and its status is up to date
 - [ ] Pre-task checklist completed
 - [ ] Code follows established patterns
 - [ ] Tests written and passing
@@ -676,4 +741,4 @@ Before submitting any code:
 
 ---
 
-**Last updated:** 2025-01-03
+**Last updated:** 2026-08-24

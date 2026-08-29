@@ -13,6 +13,29 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ---
 
+## Issue Tracking — Linear (Official)
+
+**Linear is the single source of truth for bugs and feature work.**
+
+- Workspace/team: `ZartofApp` (key `ZAR`)
+- Project: **mytops.io** — https://linear.app/zartofapp/project/mytopsio-cee0479c3109/overview
+- Labels: `Bug`, `Feature`, `Improvement`
+- Statuses: `Backlog` → `Todo` → `In Progress` → `In Review` → `Done` (also `Canceled`, `Duplicate`)
+
+### Rules
+
+1. **Every bug reported by the user gets a Linear ticket**, created in the mytops.io project with the `Bug` label.
+2. **Every feature refinement is captured in a ticket** — all relevant information (problem, proposed behaviour, acceptance criteria, technical notes, security considerations) lives in the ticket description, not only in chat. Refine the ticket *before* implementing.
+3. **Status must reflect reality.** Whenever work is picked up from Linear, update the ticket:
+   - Starting work → `In Progress`
+   - Implementation done, awaiting review/verification → `In Review`
+   - Verified and merged → `Done`
+   - Dropped → `Canceled` (with a comment explaining why)
+4. **Reference the ticket ID** (e.g. `ZAR-12`) in commit messages and CHANGELOG entries.
+5. Docs remain law: CHANGELOG.md still records *what changed and why*; Linear records *what needs doing and its state*.
+
+---
+
 ## Context Files by Task Type
 
 **Choose the right context before starting work:**
@@ -34,12 +57,14 @@ This file provides guidance to Claude Code when working with code in this reposi
 1. Read `docs/DEVELOPMENT_GUIDELINES.md`
 2. Load relevant context file from `docs/context/`
 3. Check existing patterns in codebase
+4. Ensure a Linear ticket exists for the work; set it to `In Progress`
 
 ### After ANY Task
 1. Run tests: `cd frontend && npm test -- --run`
 2. Run build: `cd frontend && npm run build`
-3. Update `docs/CHANGELOG.md` with what changed and why
+3. Update `docs/CHANGELOG.md` with what changed and why (reference the ticket ID)
 4. Update relevant context file if patterns changed
+5. Move the Linear ticket to `In Review` (or `Done` once verified)
 
 ---
 

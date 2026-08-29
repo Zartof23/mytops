@@ -16,6 +16,22 @@ All notable decisions and changes to this project are documented in this file.
 
 ## 2026
 
+### [2026-08-24] Linear Is the Official Issue Tracker
+
+**What**: Documented Linear as the single source of truth for bugs and feature work. `CLAUDE.md` gained an "Issue Tracking - Linear" section (team `ZartofApp`/`ZAR`, project [mytops.io](https://linear.app/zartofapp/project/mytopsio-cee0479c3109/overview), labels `Bug`/`Feature`/`Improvement`, status flow `Backlog` -> `Todo` -> `In Progress` -> `In Review` -> `Done`), and the pre/post-task checklists in both `CLAUDE.md` and `docs/DEVELOPMENT_GUIDELINES.md` now require creating or refining a ticket up front and updating its status on completion. `DEVELOPMENT_GUIDELINES.md` gained a full "Issue Tracking (Linear)" section covering when to create a ticket, what a bug vs feature ticket must contain, mandatory status discipline, and cross-referencing. Commit messages now carry the ticket ID as a prefix (`ZAR-12: ...`), replacing the old "will be standardized when Linear integration is added" placeholder.
+
+**Why**: Bugs and refinement decisions were living in chat threads, which do not survive a session. Tickets do. A ticket must be self-contained enough that a reader never needs the conversation that produced it - that is where refinement now happens, not in chat.
+
+**Impact**: No code change. Every future task starts and ends with a Linear status update.
+
+**Tickets created**: ZAR-12 (Cyberpunk image broken in Games), ZAR-13 (admin re-import image only, related to ZAR-12), ZAR-14 (homepage search stuck on empty state after enrichment), ZAR-15 (no loader during re-scan), ZAR-16 (cache GitHub stars API call), ZAR-17 (overall security scan), ZAR-18 (metadata-aware search, e.g. `director: Nolan`).
+
+**Files Changed**: `CLAUDE.md`, `docs/DEVELOPMENT_GUIDELINES.md`, `docs/CHANGELOG.md`
+
+**Breaking**: None.
+
+---
+
 ### [2026-08-23] JSON-LD Structured Data
 
 **What**: Added a single `application/ld+json` block to `index.html` with an `@graph` of three nodes: `WebSite`, `WebApplication` (free, feature list, cross-linked via `@id`), and `FAQPage` carrying all five home-page FAQ questions and answers. `FAQ_BANDS` is now exported from `FaqSection.tsx`, and `src/jsonLd.test.ts` asserts the block parses, declares both site types, and lists the same questions in the same order as the rendered FAQ.
